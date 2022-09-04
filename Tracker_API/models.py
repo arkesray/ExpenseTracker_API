@@ -12,7 +12,7 @@ class tbl_events(db.Model):
     EventTime = db.Column(db.DateTime, nullable=False)
     t_list = db.relationship('tbl_tlist', backref='events', lazy=True)
     event_user = db.relationship('tbl_eventusers', backref='event_user', lazy=True)
-    txn_Share = db.relationship('tbl_txnshare', backref='txn_Share', lazy=True)
+    event_txnShare = db.relationship('tbl_txnshare', backref='txn_Share', lazy=True)
 
     def __init__(self, EventName, EventDescription=None, NumberOfMembers=0,
                      EventTime=datetime.now(), ):
