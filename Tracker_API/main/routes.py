@@ -31,13 +31,16 @@ def fetch_txns():
 def fetch_participants():
     all_participants = tbl_users.query.all()
 
+    temp_persons = []
+    for person in all_participants:
+        temp_persons.append({"id" : person.id, "username" : person.Username})
     # { "Participants" :
 #            [{"id" : 1,
     #          "username" : "username"
 #           }]
     # }
     return make_response(
-            jsonify(Participants = all_participants),
+            jsonify(Participants = temp_persons),
             200,
         )
 
