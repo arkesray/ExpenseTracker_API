@@ -5,6 +5,7 @@ from .. import db
 from ..models import tbl_events, tbl_tlist, tbl_users, tbl_eventusers
 from flask import request, redirect, url_for, jsonify, make_response
 
+from .expense import expenseCalculator
 import json
 
 @main.route('/')
@@ -134,6 +135,3 @@ def delete_txns():
     except:
         return jsonify({'message' : "Failed to delete"}), 500
 
-
-def Calculate(N, txns):
-    pass
