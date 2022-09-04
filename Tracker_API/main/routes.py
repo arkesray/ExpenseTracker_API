@@ -2,7 +2,7 @@ from multiprocessing import Event
 from datetime import datetime
 from . import main
 from .. import db
-from ..models import tbl_events, tbl_tlist, tbl_users, tbl_eventusers
+from ..models import tbl_events, tbl_tlist, tbl_txnshare, tbl_users, tbl_eventusers
 from flask import request, redirect, url_for, jsonify, make_response
 
 from .expense import expenseCalculator
@@ -20,11 +20,25 @@ def home():
     response.headers["Content-Type"] = "application/json"
     return response
 
-@main.route('/fetch_txns', methods=["GET"])
-def fetch_txns():
-    all_txns = tbl_tlist.query.all()
+@main.route('/fetch_txns/<EventName>', methods=["GET"])
+def fetch_txns(EventName):
+    event = tbl_events.query.filter_by(EventName=EventName).first() 
+    event_txns = tbl_tlist.query.filter_by(EventID=event.EventID).all()
+
+    temp_txns = []
+    for txn in event_txns:
+        temp_txns.append({
+            "TxnID" : txn.TxnID, 
+            "EventID" : txn.EventID,
+            "paidByUserID" : txn.paidByUserID,
+            "Amount": txn.Amount,
+
+            "TxnDescription" : txn.TxnDescription,
+            "TxnTime" : txn.TxnTime,
+        })
+
     return make_response(
-            jsonify(txns = all_txns),
+            jsonify(txns = temp_txns),
             200,
         )
 
@@ -54,8 +68,19 @@ def fetch_events():
             200,
         ) 
 
-# @main.route('/fetch_event_participants', methods=["GET"])
-# def fetch_event_participants()
+@main.route('/fetch_event_participants/<EventName>', methods=["GET"])
+def fetch_event_participants(EventName):
+    event = tbl_events.query.filter_by(EventName=EventName).first() 
+    event_participants = tbl_users.query.filter_by(EventID=event.EventID).all()
+
+    temp_persons = []
+    for person in event_participants:
+        temp_persons.append({"id" : person.id, "username" : person.Username})
+
+    return make_response(
+            jsonify(EventID = event.EventID, EventParticipants = temp_persons),
+            200,
+        )
 
 @main.route('/add_event', methods=["PUT"])
 def add_event():
@@ -113,21 +138,54 @@ def add_txns():
     #500 internal server error
 
     # {"eventName":"aquatica", "transaction":[1,10, "0011"], "timeStamp":"2022-09-03T20:33:23.559Z"}
+
+    # {"eventName":"aquatica", "paidByUserName":"Arkes", "Amount : 100", sharedByUserNames : ["Arkes", "Puspak"],
+    # "timeStamp":"2022-09-03T20:33:23.559Z"}
+    flag_addTxnSuccess = False
+
     txn_data = request.get_json()
-    event_data = tbl_events.query.filter_by(EventName = txn_data["eventName"]).first() 
+    event_data = tbl_events.query.filter_by(EventName=txn_data["eventName"]).first()
+    paidByUser_data = tbl_users.query.filter_by(Username=txn_data["paidByUserName"]).first()
+    sharedUser_data = []
+
+    for user in txn_data["sharedByUserNames"]:
+        sharedUser_data.append(tbl_users.query.filter_by(Username=user).first())
+
+    try:
+        EventTime = datetime.strptime(txn_data["timeStamp"], "%Y-%m-%dT%H:%M:%S.%fZ")
+    except:
+        EventTime = None
+
     txn = tbl_tlist(
             EventID = event_data.EventID,
-            paidByID = txn_data["transaction"][0],
-            Amount = txn_data["transaction"][1], 
-            ShareStats = txn_data["transaction"][2], 
-            EventTime = datetime.strptime(txn_data["timeStamp"], "%Y-%m-%dT%H:%M:%S.%fZ")
+            paidByUserID = paidByUser_data.id,
+            Amount = txn_data["Amount"], 
+            EventTime = EventTime
             )
     
     try:
         db.session.add(txn)
         db.session.commit()
-        return json.dumps({'message':'Success', 'TxnID' : txn.TxnID, 'iqbal' : 'output'},
-         200, {'ContentType':'application/json'} )
+        flag_addTxnSuccess = True
+        try:
+            for user in sharedUser_data:
+                txn_Shares = tbl_txnshare(txn.TxnID, user.id, event_data.EventID)
+                db.session.add(txn_Shares)
+            
+            db.session.commit()
+
+            return json.dumps({
+                            'message':'Success', 
+                            'TxnID' : txn.TxnID,
+                            },
+                        200,
+                        {'ContentType':'application/json'} )
+        except:
+            db.session.rollback()
+            db.session.delete(txn)
+            db.session.commit()
+            return jsonify(message = "Failed Adding Shares of txn. Removed Transaction"), 500
+        
     except:
         db.session.rollback()
         return jsonify(message = "Failed Adding txn"), 500
@@ -139,12 +197,18 @@ def delete_txns():
     # 200, 500, for that event, list of all txn, iqbal er output
     txn_id = int(request.get_json()["TxnID"])
     txn = tbl_tlist.query.get(txn_id)
-    event_id = txn.EventID
+    txn_shares = tbl_txnshare.query.filter_by(TxnID=txn_id).all()
+
     try:
         db.session.delete(txn)
+        for txn_share in txn_shares:
+            db.session.delete(txn_share)
         db.session.commit()
-        return jsonify({'message' : "Success", 'iqbal' : 'output'}), 200
+        return jsonify({'message' : "Success"}), 200
         #get all event-txns and return
     except:
         return jsonify({'message' : "Failed to delete"}), 500
 
+@main.route('/calculate', methods=["GET"])
+def calculate():
+    pass
