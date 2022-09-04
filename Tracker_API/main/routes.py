@@ -71,7 +71,7 @@ def fetch_events():
 @main.route('/fetch_event_participants/<EventName>', methods=["GET"])
 def fetch_event_participants(EventName):
     event = tbl_events.query.filter_by(EventName=EventName).first() 
-    event_participants = tbl_users.query.filter_by(EventID=event.EventID).all()
+    event_participants = tbl_eventusers.query.filter_by(EventID=event.EventID).all()
 
     temp_persons = []
     for person in event_participants:
