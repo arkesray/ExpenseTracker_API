@@ -45,6 +45,9 @@ def fetch_participants():
             200,
         )
 
+# @main.route('/fetch_event_participants', methods=["GET"])
+# def fetch_event_participants()
+
 @main.route('/add_event', methods=["PUT"])
 def add_event():
 
@@ -75,13 +78,14 @@ def add_participant2event():
     #{ "participantName" : "arkes", "eventName" : "Aquatica des"}
     # 200, 500
     participant2event_data = request.get_json()
-    event = tbl_events.query.filter(EventName=participant2event_data["eventName"]).first()
-    for user in participant2event_data["participantList"]:
-        participant = tbl_users.query.filter(Username=user).first()
-        newEventUser = tbl_eventusers(EventID=event.EventID, UserID=participant.id)
-        db.session.add(newEventUser)
-        
+    event = tbl_events.query.filter_by(EventName=participant2event_data["eventName"]).first()
+    
     try:
+        for user in participant2event_data["participantList"]:
+            participant = tbl_users.query.filter_by(Username=user).first()
+            newEventUser = tbl_eventusers(EventID=event.EventID, UserID=participant.id)
+            db.session.add(newEventUser)
+        
         event.NumberOfMembers += len(participant2event_data["participantList"])
         db.session.commit()
         return make_response(
@@ -101,7 +105,7 @@ def add_txns():
 
     # {"eventName":"aquatica", "transaction":[1,10, "0011"], "timeStamp":"2022-09-03T20:33:23.559Z"}
     txn_data = request.get_json()
-    event_data = tbl_events.query.filter(EventName = txn_data["eventName"]).first() 
+    event_data = tbl_events.query.filter_by(EventName = txn_data["eventName"]).first() 
     txn = tbl_tlist(
             EventID = event_data.EventID,
             paidByID = txn_data["transaction"][0],
