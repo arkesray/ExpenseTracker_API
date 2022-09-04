@@ -76,13 +76,13 @@ def add_participant2event():
     # 200, 500
     participant2event_data = request.get_json()
     event = tbl_events.query.filter(EventName=participant2event_data["eventName"]).first()
-    participant = tbl_users.query.filter(Username=participant2event_data["participantName"]).first()
-    
-    newEventUser = tbl_eventusers(EventID=event.EventID, UserID=participant.id)
+    for user in participant2event_data["participantList"]:
+        participant = tbl_users.query.filter(Username=user).first()
+        newEventUser = tbl_eventusers(EventID=event.EventID, UserID=participant.id)
+        db.session.add(newEventUser)
         
     try:
-        event.NumberOfMembers += 1
-        db.session.add(newEventUser)
+        event.NumberOfMembers += len(participant2event_data["participantList"])
         db.session.commit()
         return make_response(
             jsonify(message = "Success"), 200,
