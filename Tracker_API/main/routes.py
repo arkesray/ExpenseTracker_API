@@ -35,15 +35,24 @@ def fetch_participants():
     temp_persons = []
     for person in all_participants:
         temp_persons.append({"id" : person.id, "username" : person.Username})
-    # { "Participants" :
-#            [{"id" : 1,
-    #          "username" : "username"
-#           }]
-    # }
+
     return make_response(
             jsonify(Participants = temp_persons),
             200,
         )
+
+@main.route('/fetch_events', methods=["GET"])
+def fetch_events():
+    all_events = tbl_events.query.all()
+
+    temp_events = []
+    for event in all_events:
+        temp_events.append({"EventID" : event.EventID, "EventName" : event.EventName})
+    
+    return make_response(
+            jsonify(Events = temp_events),
+            200,
+        ) 
 
 # @main.route('/fetch_event_participants', methods=["GET"])
 # def fetch_event_participants()
