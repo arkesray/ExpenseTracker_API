@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<head>
+    <title>
+        {{title}}
+    </title>
+    <link rel="stylesheet" href="{{url_for('static', filename='css/bootstrap.min.css')}}">
+    <link rel="stylesheet" href="{{url_for('static', filename='css/main.css')}}">
+    {% block head %} {% endblock %}
+</head>
+<body>
+
+    <nav class="navbar navbar-expand-lg">
+        <div class="container">
+        <a class="navbar-brand h1" href="{{url_for('main.home')}}">Expense Tracker Balancer</a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarTogglerDemo02" aria-controls="navbarTogglerDemo02" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon">
+                <svg class="bi bi-chevron-double-down" width="1em" height="1em" viewBox="0 0 16 16" fill="#fff" xmlns="http://www.w3.org/2000/svg">
+                    <path fill-rule="evenodd" d="M1.646 6.646a.5.5 0 0 1 .708 0L8 12.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/>
+                    <path fill-rule="evenodd" d="M1.646 2.646a.5.5 0 0 1 .708 0L8 8.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/>
+                </svg>
+            </span>
+        </button>
+        
+        <div class="collapse navbar-collapse justify-content-end" id="navbarTogglerDemo02">
+            <ul class="navbar-nav">
+                <li class="nav-item">
+                  <a class="nav-link" href="{{url_for('main.home')}}" id="nav_home">Home</a>
+                </li>
+              </ul>
+        </div>
+    </div>
+    </nav>
+
+    <div class="container">
+        {% block body %}
+        {% endblock %}
+    </div>
+
+    <script src="{{url_for('static', filename='js/jquery-3.5.1.min.js')}}"></script>
+    <script src="{{url_for('static', filename='js/bootstrap.min.js')}}"></script>
+    
+    {% block scripts %}
+    {% endblock %}
+
+</body>
+</html>
