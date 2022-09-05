@@ -249,20 +249,25 @@ def calculate(EventName):
         shared_users = tbl_txnshare.query.filter_by(TxnID=txn.TxnID).all()
         for user in shared_users:
             bin_str[person_mapping[user.UserID]] = 1
-        txns.append([person_mapping[txn.paidByUserID], txn.Amount, "".join(bin_str)])
+        txns.append([person_mapping[txn.paidByUserID],
+                     txn.Amount, 
+                     "".join([str(v) for v in bin_str])
+                ])
     
-    pendingTxns = expenseCalculator(numberOfParticipants, txn)
+    pendingTxns = expenseCalculator(numberOfParticipants, txns)
 
     # 0 1 21.00
     # 3 0 43.40
     # 3 1 10.00
     temp_pendingTxns = []
     for pendingTxn in pendingTxns:
-        sender = tbl_users.query.filter_by(id=person_mapping_rev[pendingTxn[0]])
-        receiver = tbl_users.query.filter_by(id=person_mapping_rev[pendingTxn[1]])
+        sender = tbl_users.query.filter_by(id=person_mapping_rev[pendingTxn[0]]).first()
+        receiver = tbl_users.query.filter_by(id=person_mapping_rev[pendingTxn[1]]).first()
         temp_pendingTxns.append([sender.Username, receiver.Username, pendingTxn[2]])
 
     response = {
         "eventID" : event_data.EventID,
         "transactionDetails" : temp_pendingTxns
     }
+
+    return jsonify(response), 200
