@@ -73,12 +73,12 @@ def fetch_event_participants(EventName):
     event = tbl_events.query.filter_by(EventName=EventName).first() 
     event_participants = tbl_eventusers.query.filter_by(EventID=event.EventID).all()
 
-    temp_eventUser = tbl_users.query.filter(
-        tbl_users.id.in_([v.UserID for v in event_participants])).all()
+    temp_eventUsers = tbl_users.query.filter(
+        tbl_users.id.in_([eventUser.UserID for eventUser in event_participants])).all()
     
     temp_persons = []
-    for person in temp_eventUser:
-        temp_persons.append({"id" : person.id, "username" : person.Username})
+    for user in temp_eventUsers:
+        temp_persons.append({"id" : user.id, "username" : user.Username})
 
     return make_response(
             jsonify(EventID = event.EventID, EventParticipants = temp_persons),
@@ -112,23 +112,32 @@ def add_event():
 @main.route('/add_participant2event', methods=["PUT"])
 def add_participant2event():
 
-    #{ "participantName" : "arkes", "eventName" : "Aquatica des"}
+    # OLD - { "participantName" : "arkes", "eventName" : "Aquatica des"}
+    # {"eventName":"string", "participantList":["puspak","iqbal","arkes"]}
     # 200, 500
     participant2event_data = request.get_json()
     event = tbl_events.query.filter_by(EventName=participant2event_data["eventName"]).first()
     
+    participants = tbl_users.query.filter(
+        tbl_users.Username.in_(participant2event_data["participantList"])).all()
+    
     try:
-        for user in participant2event_data["participantList"]:
-            participant = tbl_users.query.filter_by(Username=user).first()
-            newEventUser = tbl_eventusers(EventID=event.EventID, UserID=participant.id)
+        # for user in participant2event_data["participantList"]:
+        #     participant = tbl_users.query.filter_by(Username=user).first()
+        #     newEventUser = tbl_eventusers(EventID=event.EventID, UserID=participant.id)
+        #     db.session.add(newEventUser)
+        for participant in participants:
+            newEventUser = tbl_eventusers(EventID=event.EventID, UserID=participant.id, 
+                                            JoinTime=datetime.now())
             db.session.add(newEventUser)
-        
+
         event.NumberOfMembers += len(participant2event_data["participantList"])
         db.session.commit()
         return make_response(
             jsonify(message = "Success"), 200,
         )
-    except:
+    except Exception as E:
+        print(E)
         db.session.rollback()
         return make_response(
             jsonify(message = "Adding Participant to Event Failed"), 500,
@@ -142,17 +151,18 @@ def add_txns():
 
     # {"eventName":"aquatica", "transaction":[1,10, "0011"], "timeStamp":"2022-09-03T20:33:23.559Z"}
 
-    # {"eventName":"aquatica", "paidByUserName":"Arkes", "Amount : 100", sharedByUserNames : ["Arkes", "Puspak"],
-    # "timeStamp":"2022-09-03T20:33:23.559Z"}
+    # {"eventName":"aquatica", "paidByUserName":"Arkes", "Amount : 100", 
+    # sharedByUserNames : ["Arkes", "Puspak"], "timeStamp":"2022-09-03T20:33:23.559Z"}
     flag_addTxnSuccess = False
 
     txn_data = request.get_json()
     event_data = tbl_events.query.filter_by(EventName=txn_data["eventName"]).first()
     paidByUser_data = tbl_users.query.filter_by(Username=txn_data["paidByUserName"]).first()
-    sharedUser_data = []
+    sharedUser_data = tbl_users.query.filter(
+        tbl_users.Username.in_(txn_data["sharedByUserNames"])).all()
 
-    for user in txn_data["sharedByUserNames"]:
-        sharedUser_data.append(tbl_users.query.filter_by(Username=user).first())
+    # for user in txn_data["sharedByUserNames"]:
+    #     sharedUser_data.append(tbl_users.query.filter_by(Username=user).first())
 
     try:
         EventTime = datetime.strptime(txn_data["timeStamp"], "%Y-%m-%dT%H:%M:%S.%fZ")
