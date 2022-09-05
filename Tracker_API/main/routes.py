@@ -170,7 +170,7 @@ def add_txns():
             Amount = float(txn_data["Amount"]), 
             TxnTime = EventTime
             )
-    
+    print(txn_data)
     try:
         db.session.add(txn)
         db.session.commit()
@@ -179,15 +179,10 @@ def add_txns():
             for user in sharedUser_data:
                 txn_Shares = tbl_txnshare(txn.TxnID, user.id, event_data.EventID)
                 db.session.add(txn_Shares)
-            
-            db.session.commit()
 
-            return json.dumps({
-                            'message':'Success', 
-                            'TxnID' : txn.TxnID,
-                            },
-                        200,
-                        {'ContentType':'application/json'} )
+            db.session.commit()
+            return jsonify(message = "Success", TxnID = txn.TxnID, ), 200
+            
         except:
             db.session.rollback()
             db.session.delete(txn)
