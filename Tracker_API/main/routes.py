@@ -28,12 +28,20 @@ def fetch_txns(EventName):
 
     temp_txns = []
     for txn in event_txns:
+        paidByUser = tbl_users.query.filter_by(id=txn.paidByUserID).first()
+        
+        sharedByUsers = []
+        txns_shares = tbl_txnshare.query.filter_by(EventID=event.EventID, TxnID=txn.TxnID).all()
+        for txn_sharedUser in txns_shares:
+            sharedUser = tbl_users.query.filter_by(id=txn_sharedUser.UserID).first()
+            sharedByUsers.append(sharedUser.Username)
+
         temp_txns.append({
             "TxnID" : txn.TxnID, 
             "EventID" : txn.EventID,
-            "paidByUserID" : txn.paidByUserID,
+            "paidByUserName" : paidByUser.Username,
             "Amount": txn.Amount,
-
+            "sharedByUserNames" : sharedByUsers,
             "TxnDescription" : txn.TxnDescription,
             "TxnTime" : txn.TxnTime,
         })
