@@ -27,13 +27,13 @@ class tbl_tlist(db.Model):
     TxnID = db.Column(db.Integer, primary_key=True)
     EventID = db.Column(db.Integer, db.ForeignKey('tbl_events.EventID'), nullable=False)
     paidByUserID = db.Column(db.Integer, db.ForeignKey('tbl_users.id'), nullable=False)
-    Amount = db.Column(db.Integer, nullable=False)
+    Amount = db.Column(db.Float, nullable=False)
     TxnDescription = db.Column(db.String(100), nullable=True)
     TxnTime = db.Column(db.DateTime, nullable=False)
     CreatedByUserID = db.Column(db.Integer, nullable=True)
     txn_Share = db.relationship('tbl_txnshare', backref='txn_Share', lazy=True)
 
-    def __init__(self, EventID, paidByUserID, Amount,
+    def __init__(self, EventID, paidByUserID, Amount=0,
                     TxnDescription=None, TxnTime=datetime.now(), ):
         self.EventID = EventID
         self.paidByUserID = paidByUserID

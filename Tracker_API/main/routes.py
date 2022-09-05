@@ -1,5 +1,6 @@
 from multiprocessing import Event
 from datetime import datetime
+from urllib import response
 from . import main
 from .. import db
 from ..models import tbl_events, tbl_tlist, tbl_txnshare, tbl_users, tbl_eventusers
@@ -112,7 +113,6 @@ def add_event():
 @main.route('/add_participant2event', methods=["PUT"])
 def add_participant2event():
 
-    # OLD - { "participantName" : "arkes", "eventName" : "Aquatica des"}
     # {"eventName":"string", "participantList":["puspak","iqbal","arkes"]}
     # 200, 500
     participant2event_data = request.get_json()
@@ -122,10 +122,6 @@ def add_participant2event():
         tbl_users.Username.in_(participant2event_data["participantList"])).all()
     
     try:
-        # for user in participant2event_data["participantList"]:
-        #     participant = tbl_users.query.filter_by(Username=user).first()
-        #     newEventUser = tbl_eventusers(EventID=event.EventID, UserID=participant.id)
-        #     db.session.add(newEventUser)
         for participant in participants:
             newEventUser = tbl_eventusers(EventID=event.EventID, UserID=participant.id, 
                                             JoinTime=datetime.now())
@@ -136,8 +132,7 @@ def add_participant2event():
         return make_response(
             jsonify(message = "Success"), 200,
         )
-    except Exception as E:
-        print(E)
+    except:
         db.session.rollback()
         return make_response(
             jsonify(message = "Adding Participant to Event Failed"), 500,
@@ -167,13 +162,13 @@ def add_txns():
     try:
         EventTime = datetime.strptime(txn_data["timeStamp"], "%Y-%m-%dT%H:%M:%S.%fZ")
     except:
-        EventTime = None
+        EventTime = datetime.now()
 
     txn = tbl_tlist(
             EventID = event_data.EventID,
             paidByUserID = paidByUser_data.id,
-            Amount = txn_data["Amount"], 
-            EventTime = EventTime
+            Amount = float(txn_data["Amount"]), 
+            TxnTime = EventTime
             )
     
     try:
@@ -222,6 +217,57 @@ def delete_txns():
     except:
         return jsonify({'message' : "Failed to delete"}), 500
 
-@main.route('/calculate', methods=["GET"])
-def calculate():
-    pass
+
+@main.route('/calculate/<EventName>', methods=["GET"])
+def calculate(EventName):
+
+    event_data = tbl_events.query.filter_by(EventName=EventName).first()
+    event_participants = tbl_eventusers.query.filter_by(EventID=event_data.EventID).all()
+    event_txns = tbl_tlist.query.filter_by(EventID=event_data.EventID).all()
+#     txns = [
+#     #paidBy #amount #share
+#     [3, 100,     "1111"],
+#     [2, 300,    "1110"],
+#     [1, 500,     "1001"],
+# ]
+    # 1,2,4,5,10,33
+    # {
+        # 1 : 0
+        # 2 : 1
+        # 4 : 2
+        # 5 : 3
+        # 33 : 4
+        # 10 : 5
+    # }
+    # 2 100.00 [33, 2, 1] - > 1 100.0 "110010"
+
+    numberOfParticipants = len(event_participants)
+    person_mapping, person_mapping_rev = {}, {}
+    for i in range(numberOfParticipants):
+        event_participant = event_participants[i]
+        person_mapping[event_participant.UserID] = i
+        person_mapping_rev[i] = event_participant.UserID
+
+    txns = []
+    for txn in event_txns:
+        bin_str = [0]*numberOfParticipants
+        shared_users = tbl_txnshare.query.filter_by(TxnID=txn.TxnID).all()
+        for user in shared_users:
+            bin_str[person_mapping[user.UserID]] = 1
+        txns.append([person_mapping[txn.paidByUserID], txn.Amount, "".join(bin_str)])
+    
+    pendingTxns = expenseCalculator(numberOfParticipants, txn)
+
+    # 0 1 21.00
+    # 3 0 43.40
+    # 3 1 10.00
+    temp_pendingTxns = []
+    for pendingTxn in pendingTxns:
+        sender = tbl_users.query.filter_by(id=person_mapping_rev[pendingTxn[0]])
+        receiver = tbl_users.query.filter_by(id=person_mapping_rev[pendingTxn[1]])
+        temp_pendingTxns.append([sender.Username, receiver.Username, pendingTxn[2]])
+
+    response = {
+        "eventID" : event_data.EventID,
+        "transactionDetails" : temp_pendingTxns
+    }
