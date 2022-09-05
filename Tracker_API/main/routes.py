@@ -73,8 +73,11 @@ def fetch_event_participants(EventName):
     event = tbl_events.query.filter_by(EventName=EventName).first() 
     event_participants = tbl_eventusers.query.filter_by(EventID=event.EventID).all()
 
+    temp_eventUser = tbl_users.query.filter(
+        tbl_users.id.in_([v.UserID for v in event_participants])).all()
+    
     temp_persons = []
-    for person in event_participants:
+    for person in temp_eventUser:
         temp_persons.append({"id" : person.id, "username" : person.Username})
 
     return make_response(
