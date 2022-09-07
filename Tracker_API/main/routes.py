@@ -205,7 +205,7 @@ def add_txns():
 def delete_txns():
     txn_id = int(request.get_json()["TxnID"])
     txn = tbl_tlist.query.get(txn_id)
-    txn_shares = tbl_txnshare.query.filter_by(TxnID=txn_id).all()
+    # txn_shares = tbl_txnshare.query.filter_by(TxnID=txn_id).all()
 
     try:
         db.session.delete(txn)
