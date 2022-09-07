@@ -1,5 +1,6 @@
 from flask import Flask 
 from flask_sqlalchemy import SQLAlchemy 
+from flask_cors import CORS, cross_origin
 
 db = SQLAlchemy()
 
@@ -15,6 +16,8 @@ def create_app(debug=False):
     from .models import db
     db.init_app(app)
     
+    CORS(app, resources={r"/*": {"origins": "*"}})
+
     with app.app_context():
         db.create_all()
     return app
