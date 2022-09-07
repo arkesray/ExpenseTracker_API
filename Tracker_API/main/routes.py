@@ -167,15 +167,15 @@ def add_txns():
     #     sharedUser_data.append(tbl_users.query.filter_by(Username=user).first())
 
     try:
-        EventTime = datetime.strptime(txn_data["timeStamp"], "%Y-%m-%dT%H:%M:%S.%fZ")
+        TxnTime = datetime.strptime(txn_data["timeStamp"], "%Y-%m-%dT%H:%M:%S.%fZ")
     except:
-        EventTime = datetime.now()
+        TxnTime = datetime.now()
 
     txn = tbl_tlist(
             EventID = event_data.EventID,
             paidByUserID = paidByUser_data.id,
             Amount = float(txn_data["Amount"]), 
-            TxnTime = EventTime
+            TxnTime = TxnTime
             )
 
     try:
