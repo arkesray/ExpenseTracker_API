@@ -4,7 +4,7 @@ from urllib import response
 from . import main
 from .. import db
 from ..models import tbl_events, tbl_tlist, tbl_txnshare, tbl_users, tbl_eventusers
-from flask import request, redirect, url_for, jsonify, make_response
+from flask import request, jsonify, make_response
 
 from .expense import expenseCalculator
 import json
@@ -21,35 +21,6 @@ def home():
     response.headers["Content-Type"] = "application/json"
     return response
 
-@main.route('/fetch_txns/<EventName>', methods=["GET"])
-def fetch_txns(EventName):
-    event = tbl_events.query.filter_by(EventName=EventName).first() 
-    event_txns = tbl_tlist.query.filter_by(EventID=event.EventID).all()
-
-    temp_txns = []
-    for txn in event_txns:
-        paidByUser = tbl_users.query.filter_by(id=txn.paidByUserID).first()
-        
-        sharedByUsers = []
-        txns_shares = tbl_txnshare.query.filter_by(EventID=event.EventID, TxnID=txn.TxnID).all()
-        for txn_sharedUser in txns_shares:
-            sharedUser = tbl_users.query.filter_by(id=txn_sharedUser.UserID).first()
-            sharedByUsers.append(sharedUser.Username)
-
-        temp_txns.append({
-            "TxnID" : txn.TxnID, 
-            "EventID" : txn.EventID,
-            "paidByUserName" : paidByUser.Username,
-            "Amount": txn.Amount,
-            "sharedByUserNames" : sharedByUsers,
-            "TxnDescription" : txn.TxnDescription,
-            "TxnTime" : txn.TxnTime,
-        })
-
-    return make_response(
-            jsonify(txns = temp_txns),
-            200,
-        )
 
 @main.route('/fetch_participants', methods=["GET"])
 def fetch_participants():
@@ -64,6 +35,7 @@ def fetch_participants():
             200,
         )
 
+
 @main.route('/fetch_events', methods=["GET"])
 def fetch_events():
     all_events = tbl_events.query.all()
@@ -77,16 +49,17 @@ def fetch_events():
             200,
         ) 
 
+
 @main.route('/fetch_event_participants/<EventName>', methods=["GET"])
 def fetch_event_participants(EventName):
     event = tbl_events.query.filter_by(EventName=EventName).first() 
-    event_participants = tbl_eventusers.query.filter_by(EventID=event.EventID).all()
+    # event_participants = tbl_eventusers.query.filter_by(EventID=event.EventID).all()
 
-    temp_eventUsers = tbl_users.query.filter(
-        tbl_users.id.in_([eventUser.UserID for eventUser in event_participants])).all()
+    # temp_eventUsers = tbl_users.query.filter(
+    #     tbl_users.id.in_([eventUser.UserID for eventUser in event_participants])).all()
     
     temp_persons = []
-    for user in temp_eventUsers:
+    for user in event.event_users:
         temp_persons.append({"id" : user.id, "username" : user.Username})
 
     return make_response(
@@ -94,11 +67,43 @@ def fetch_event_participants(EventName):
             200,
         )
 
+
+@main.route('/fetch_txns/<EventName>', methods=["GET"])
+def fetch_txns(EventName):
+    event = tbl_events.query.filter_by(EventName=EventName).first() 
+    #event_txns = tbl_tlist.query.filter_by(EventID=event.EventID).all()
+
+    temp_txns = []
+    for txn in event.txns:
+        # paidByUser = tbl_users.query.filter_by(id=txn.paidByUserID).first()
+        # sharedByUsers = []
+        # txns_shares = tbl_txnshare.query.filter_by(EventID=event.EventID, TxnID=txn.TxnID).all()
+        # for txn_sharedUser in txns_shares:
+        #     sharedUser = tbl_users.query.filter_by(id=txn_sharedUser.UserID).first()
+        #     sharedByUsers.append(sharedUser.Username)
+        # sharedByUsers = []
+        # for txn_sharedUser in txn.shared_users:
+        #     sharedByUsers.append(txn_sharedUser.Username)
+
+        temp_txns.append({
+            "TxnID" : txn.TxnID, 
+            "EventID" : txn.EventID,
+            "paidByUserName" : txn.txn_paidUser.Username,
+            "Amount": txn.Amount,
+            "sharedByUserNames" : [txn_sharedUser.Username for txn_sharedUser in txn.shared_users],
+            "TxnDescription" : txn.TxnDescription,
+            "TxnTime" : txn.TxnTime,
+        })
+
+    return make_response(
+            jsonify(txns = temp_txns),
+            200,
+        )
+
+
 @main.route('/add_event', methods=["PUT"])
 def add_event():
 
-    #{ "eventName" : "Aquatica", "eventDescription" : "Aquatica des"}
-    # eventID, 500
     event_data = request.get_json()
     event = tbl_events(
         EventName=event_data["eventName"],
@@ -117,7 +122,8 @@ def add_event():
             jsonify(message = "Error Adding New Event"),
             500,
         )
-    
+
+
 @main.route('/add_participant2event', methods=["PUT"])
 def add_participant2event():
 
@@ -149,13 +155,6 @@ def add_participant2event():
     
 @main.route('/add_txns', methods=["PUT"])
 def add_txns():
-    #200 ok , txn ID, iqbal er output
-    #500 internal server error
-
-    # {"eventName":"aquatica", "transaction":[1,10, "0011"], "timeStamp":"2022-09-03T20:33:23.559Z"}
-
-    # {"eventName":"aquatica", "paidByUserName":"Arkes", "Amount : 100", 
-    # sharedByUserNames : ["Arkes", "Puspak"], "timeStamp":"2022-09-03T20:33:23.559Z"}
     flag_addTxnSuccess = False
 
     txn_data = request.get_json()
@@ -178,7 +177,7 @@ def add_txns():
             Amount = float(txn_data["Amount"]), 
             TxnTime = EventTime
             )
-    print(txn_data)
+
     try:
         db.session.add(txn)
         db.session.commit()
@@ -204,16 +203,14 @@ def add_txns():
 
 @main.route('/delete_txns', methods=["DELETE"])
 def delete_txns():
-    # txnid
-    # 200, 500, for that event, list of all txn, iqbal er output
     txn_id = int(request.get_json()["TxnID"])
     txn = tbl_tlist.query.get(txn_id)
     txn_shares = tbl_txnshare.query.filter_by(TxnID=txn_id).all()
 
     try:
         db.session.delete(txn)
-        for txn_share in txn_shares:
-            db.session.delete(txn_share)
+        # for txn_share in txn_shares:
+        #     db.session.delete(txn_share)
         db.session.commit()
         return jsonify({'message' : "Success"}), 200
         #get all event-txns and return
@@ -225,38 +222,22 @@ def delete_txns():
 def calculate(EventName):
 
     event_data = tbl_events.query.filter_by(EventName=EventName).first()
-    event_participants = tbl_eventusers.query.filter_by(EventID=event_data.EventID).all()
-    event_txns = tbl_tlist.query.filter_by(EventID=event_data.EventID).all()
-#     txns = [
-#     #paidBy #amount #share
-#     [3, 100,     "1111"],
-#     [2, 300,    "1110"],
-#     [1, 500,     "1001"],
-# ]
-    # 1,2,4,5,10,33
-    # {
-        # 1 : 0
-        # 2 : 1
-        # 4 : 2
-        # 5 : 3
-        # 33 : 4
-        # 10 : 5
-    # }
-    # 2 100.00 [33, 2, 1] - > 1 100.0 "110010"
+    # event_participants = tbl_eventusers.query.filter_by(EventID=event_data.EventID).all()
+    # event_txns = tbl_tlist.query.filter_by(EventID=event_data.EventID).all()
 
-    numberOfParticipants = len(event_participants)
+    numberOfParticipants = len(event_data.event_users)
     person_mapping, person_mapping_rev = {}, {}
     for i in range(numberOfParticipants):
-        event_participant = event_participants[i]
-        person_mapping[event_participant.UserID] = i
-        person_mapping_rev[i] = event_participant.UserID
+        event_participant = event_data.event_users[i]
+        person_mapping[event_participant.id] = i
+        person_mapping_rev[i] = event_participant.id
 
     txns = []
-    for txn in event_txns:
+    for txn in event_data.txns:
         bin_str = [0]*numberOfParticipants
-        shared_users = tbl_txnshare.query.filter_by(TxnID=txn.TxnID).all()
-        for user in shared_users:
-            bin_str[person_mapping[user.UserID]] = 1
+        # shared_users = tbl_txnshare.query.filter_by(TxnID=txn.TxnID).all()
+        for user in txn.shared_users:
+            bin_str[person_mapping[user.id]] = 1
         txns.append([person_mapping[txn.paidByUserID],
                      txn.Amount, 
                      "".join([str(v) for v in bin_str])
@@ -264,9 +245,6 @@ def calculate(EventName):
     
     pendingTxns = expenseCalculator(numberOfParticipants, txns)
 
-    # 0 1 21.00
-    # 3 0 43.40
-    # 3 1 10.00
     temp_pendingTxns = []
     for pendingTxn in pendingTxns:
         sender = tbl_users.query.filter_by(id=person_mapping_rev[pendingTxn[0]]).first()

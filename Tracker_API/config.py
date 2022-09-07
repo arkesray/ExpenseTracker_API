@@ -1,4 +1,4 @@
 
 SECRET_KEY = 'secret!'
-SQLALCHEMY_DATABASE_URI = 'postgresql://jjamzpcehcytib:ab67feefd5a52e00b395bdfc2c627db157931f76883ffc4162e912ce240c1d07@ec2-35-168-122-84.compute-1.amazonaws.com:5432/dfk5buv6nhgel6'
+SQLALCHEMY_DATABASE_URI = 'postgresql://eufiirodkemawt:4b43d5ef8f0d949497fc43d6d3e75273565c66dfe7e2007264c6c915a9c7d1da@ec2-54-227-248-71.compute-1.amazonaws.com:5432/d2qqgho9rrpmio'
 SQLALCHEMY_TRACK_MODIFICATIONS = False

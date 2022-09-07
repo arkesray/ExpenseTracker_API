@@ -10,9 +10,9 @@ class tbl_events(db.Model):
     EventDescription = db.Column(db.String(100), nullable=True)
     NumberOfMembers = db.Column(db.Integer, nullable=False)
     EventTime = db.Column(db.DateTime, nullable=False)
-    t_list = db.relationship('tbl_tlist', backref='events', lazy=True)
-    event_user = db.relationship('tbl_eventusers', backref='event_user', lazy=True)
-    event_txnShare = db.relationship('tbl_txnshare', backref='event_txnShare', lazy=True)
+    txns = db.relationship('tbl_tlist', backref='txn_event', lazy=True)
+    event_users = db.relationship('tbl_users', secondary='tbl_eventusers', back_populates='user_events', lazy=True)
+    event_txnShare = db.relationship('tbl_txnshare', backref='txnShare_event', lazy=True)
 
     def __init__(self, EventName, EventDescription=None, NumberOfMembers=0,
                      EventTime=datetime.now(), ):
@@ -25,13 +25,13 @@ class tbl_events(db.Model):
 class tbl_tlist(db.Model):
     __tablename___ = 'tbl_tlist'
     TxnID = db.Column(db.Integer, primary_key=True)
-    EventID = db.Column(db.Integer, db.ForeignKey('tbl_events.EventID'), nullable=False)
-    paidByUserID = db.Column(db.Integer, db.ForeignKey('tbl_users.id'), nullable=False)
+    EventID = db.Column(db.Integer, db.ForeignKey('tbl_events.EventID'), nullable=False) #txn_event
+    paidByUserID = db.Column(db.Integer, db.ForeignKey('tbl_users.id'), nullable=False) #txn_paidUser
     Amount = db.Column(db.Float, nullable=False)
     TxnDescription = db.Column(db.String(100), nullable=True)
     TxnTime = db.Column(db.DateTime, nullable=False)
     CreatedByUserID = db.Column(db.Integer, nullable=True)
-    txn_Share = db.relationship('tbl_txnshare', backref='txn_Share', lazy=True)
+    shared_users = db.relationship('tbl_users', secondary='tbl_txnshare', back_populates='user_txnShares', lazy=True)
 
     def __init__(self, EventID, paidByUserID, Amount=0,
                     TxnDescription=None, TxnTime=datetime.now(), ):
@@ -48,9 +48,9 @@ class tbl_users(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     Username = db.Column(db.String(30), unique=True, nullable=False)
     Password = db.Column(db.String(255), nullable=False)
-    user_event = db.relationship('tbl_eventusers', backref='user_event', lazy=True)
-    user_txn = db.relationship('tbl_tlist', backref='user_txn', lazy=True)
-    user_txnShare = db.relationship('tbl_txnshare', backref='user_txnShare', lazy=True)
+    paid_txns = db.relationship('tbl_tlist', backref='txn_paidUser', lazy=True)
+    user_events = db.relationship('tbl_events', secondary='tbl_eventusers', back_populates='event_users', lazy=True)
+    user_txnShares = db.relationship('tbl_tlist', secondary='tbl_txnshare', back_populates='shared_users', lazy=True)
 
     def __init__(self, Username, Password="Password"):
        self.Username = Username
@@ -59,8 +59,8 @@ class tbl_users(UserMixin, db.Model):
 
 class tbl_eventusers(db.Model):
     __tablename___ = 'tbl_eventusers'
-    EventID = db.Column(db.Integer, db.ForeignKey('tbl_events.EventID'), primary_key=True, nullable=False)
-    UserID = db.Column(db.Integer, db.ForeignKey('tbl_users.id'), primary_key=True, nullable=False)
+    EventID = db.Column(db.Integer, db.ForeignKey('tbl_events.EventID'), primary_key=True, nullable=False) #event
+    UserID = db.Column(db.Integer, db.ForeignKey('tbl_users.id'), primary_key=True, nullable=False) #user
     JoinTime = db.Column(db.DateTime, nullable=False)
 
     def __init__(self, EventID, UserID, JoinTime=datetime.now()):
