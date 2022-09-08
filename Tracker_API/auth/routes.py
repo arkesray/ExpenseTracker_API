@@ -29,7 +29,6 @@ def login():
                             },
                         current_app.config['SECRET_KEY']
                         )
-        print(token)
         return jsonify({'token' : token}), 200
 
     return make_response('Could not verify', 401, {'WWW-Authenticate' : 'Basic realm="Login required!"'})
