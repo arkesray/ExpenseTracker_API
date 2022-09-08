@@ -50,8 +50,8 @@ class tbl_users(UserMixin, db.Model):
     Password = db.Column(db.String(255), nullable=False)
     Name = db.Column(db.String(30), unique=False, nullable=False)
     isRegistered = db.Column(db.Boolean, nullable=False)
-    paid_txns = db.relationship('tbl_tlist', backref='txn_paidUser', lazy=True)
-    created_txns = db.relationship('tbl_tlist', backref='txn_createdUser', lazy=True)
+    paid_txns = db.relationship('tbl_tlist', foreign_keys='tbl_tlist.paidByUserID', backref='txn_paidUser', lazy=True)
+    created_txns = db.relationship('tbl_tlist', foreign_keys='tbl_tlist.createdByUserID', backref='txn_createdUser', lazy=True)
     user_events = db.relationship('tbl_events', secondary='tbl_eventusers', back_populates='event_users', lazy=True)
     user_txnShares = db.relationship('tbl_tlist', secondary='tbl_txnshare', back_populates='shared_users', lazy=True)
 
