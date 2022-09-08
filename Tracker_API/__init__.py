@@ -9,6 +9,9 @@ def create_app(debug=False):
     app.config.from_pyfile('config.py')
 
     app.debug = debug
+
+    from .auth import auth as auth_blueprint
+    app.register_blueprint(auth_blueprint, url_prefix='/')
     
     from .main import main as main_blueprint
     app.register_blueprint(main_blueprint, url_prefix='/')

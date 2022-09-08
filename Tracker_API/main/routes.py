@@ -1,25 +1,18 @@
-from multiprocessing import Event
 from datetime import datetime
-from urllib import response
 from . import main
 from .. import db
 from ..models import tbl_events, tbl_tlist, tbl_txnshare, tbl_users, tbl_eventusers
 from flask import request, jsonify, make_response
 
-from .expense import expenseCalculator
+from ..helpers import expenseCalculator, token_required
 import json
 
-@main.route('/')
-@main.route('/home')
-def home():
-    response = make_response(
-                jsonify(
-                    {"message": "This is Home Page"}
-                ),
-                200,
-            )
-    response.headers["Content-Type"] = "application/json"
-    return response
+def isUserInEvent(this_user, this_eventName):
+    all_User_events = this_user.user_events
+    for event in all_User_events:
+        if event.EventName == this_eventName:
+            return event
+    return None
 
 
 @main.route('/fetch_participants', methods=["GET"])
@@ -37,11 +30,12 @@ def fetch_participants():
 
 
 @main.route('/fetch_events', methods=["GET"])
-def fetch_events():
-    all_events = tbl_events.query.all()
+@token_required
+def fetch_events(current_user):
+    all_User_events = current_user.user_events
 
     temp_events = []
-    for event in all_events:
+    for event in all_User_events:
         temp_events.append({"EventID" : event.EventID, "EventName" : event.EventName})
     
     return make_response(
@@ -51,40 +45,31 @@ def fetch_events():
 
 
 @main.route('/fetch_event_participants/<EventName>', methods=["GET"])
-def fetch_event_participants(EventName):
-    event = tbl_events.query.filter_by(EventName=EventName).first() 
-    # event_participants = tbl_eventusers.query.filter_by(EventID=event.EventID).all()
+@token_required
+def fetch_event_participants(current_user, EventName):
+    event_data = isUserInEvent(current_user, EventName)
+    if event_data == None:
+        return jsonify(message = "Event doesn't exist or You are not Authorised "), 403
 
-    # temp_eventUsers = tbl_users.query.filter(
-    #     tbl_users.id.in_([eventUser.UserID for eventUser in event_participants])).all()
-    
     temp_persons = []
-    for user in event.event_users:
+    for user in event_data.event_users:
         temp_persons.append({"id" : user.id, "username" : user.Username})
 
     return make_response(
-            jsonify(EventID = event.EventID, EventParticipants = temp_persons),
+            jsonify(EventID = event_data.EventID, EventParticipants = temp_persons),
             200,
         )
 
 
 @main.route('/fetch_txns/<EventName>', methods=["GET"])
-def fetch_txns(EventName):
-    event = tbl_events.query.filter_by(EventName=EventName).first() 
-    #event_txns = tbl_tlist.query.filter_by(EventID=event.EventID).all()
+@token_required
+def fetch_txns(current_user, EventName):
+    event_data = isUserInEvent(current_user, EventName)
+    if event_data == None:
+        return jsonify(message = "Event doesn't exist or You are not Authorised "), 403
 
     temp_txns = []
-    for txn in event.txns:
-        # paidByUser = tbl_users.query.filter_by(id=txn.paidByUserID).first()
-        # sharedByUsers = []
-        # txns_shares = tbl_txnshare.query.filter_by(EventID=event.EventID, TxnID=txn.TxnID).all()
-        # for txn_sharedUser in txns_shares:
-        #     sharedUser = tbl_users.query.filter_by(id=txn_sharedUser.UserID).first()
-        #     sharedByUsers.append(sharedUser.Username)
-        # sharedByUsers = []
-        # for txn_sharedUser in txn.shared_users:
-        #     sharedByUsers.append(txn_sharedUser.Username)
-
+    for txn in event_data.txns:
         temp_txns.append({
             "TxnID" : txn.TxnID, 
             "EventID" : txn.EventID,
@@ -102,46 +87,61 @@ def fetch_txns(EventName):
 
 
 @main.route('/add_event', methods=["PUT"])
-def add_event():
-
+@token_required
+def add_event(current_user):
     event_data = request.get_json()
     event = tbl_events(
         EventName=event_data["eventName"],
         EventDescription=event_data["eventDescription"]
     )
+
     try:
+        flag_deleteEventFailed = False
         db.session.add(event)
         db.session.commit()
-        return make_response(
-            jsonify(eventID = event.EventID),
-            200,
-        )
+        try:
+            newEventUser = tbl_eventusers(
+                    EventID=event.EventID,
+                    UserID=current_user.id,
+                    JoinTime=datetime.now()
+                )
+            event.NumberOfMembers += 1
+            db.session(newEventUser)
+            db.session.commit()
+            return jsonify(eventID = event.EventID), 200
+
+        except:
+            flag_deleteEventFailed = True
+            db.session.rollback()
+            db.session.delete(event)
+            db.session.commit()
+            return jsonify(message = "Error Adding CreatedByUser to Event. Event Deleted!!!"), 500
     except:
         db.session.rollback()
-        return make_response(
-            jsonify(message = "Error Adding New Event"),
-            500,
-        )
+        if not flag_deleteEventFailed:
+            return jsonify(message = "Error Adding New Event"), 500
+        else:
+            return jsonify(message = "EVENT CREATED without CREATOR in event"), 500
 
 
 @main.route('/add_participant2event', methods=["PUT"])
-def add_participant2event():
-
-    # {"eventName":"string", "participantList":["puspak","iqbal","arkes"]}
-    # 200, 500
+@token_required
+def add_participant2event(current_user):
     participant2event_data = request.get_json()
-    event = tbl_events.query.filter_by(EventName=participant2event_data["eventName"]).first()
+    event_data = isUserInEvent(current_user, participant2event_data["eventName"])
+    if event_data == None:
+        return jsonify(message = "Event doesn't exist or You are not Authorised "), 403
     
     participants = tbl_users.query.filter(
         tbl_users.Username.in_(participant2event_data["participantList"])).all()
     
     try:
         for participant in participants:
-            newEventUser = tbl_eventusers(EventID=event.EventID, UserID=participant.id, 
+            newEventUser = tbl_eventusers(EventID=event_data.EventID, UserID=participant.id, 
                                             JoinTime=datetime.now())
             db.session.add(newEventUser)
 
-        event.NumberOfMembers += len(participant2event_data["participantList"])
+        event_data.NumberOfMembers += len(participant2event_data["participantList"])
         db.session.commit()
         return make_response(
             jsonify(message = "Success"), 200,
@@ -154,34 +154,41 @@ def add_participant2event():
 
     
 @main.route('/add_txns', methods=["PUT"])
-def add_txns():
-    flag_addTxnSuccess = False
-
+@token_required
+def add_txns(current_user):
     txn_data = request.get_json()
-    event_data = tbl_events.query.filter_by(EventName=txn_data["eventName"]).first()
+
+    event_data = isUserInEvent(current_user, txn_data["eventName"])
+    if event_data == None:
+        return jsonify(message = "Event doesn't exist or You are not Authorised "), 403
+
+    if len(txn_data["sharedByUserNames"]) == 0:
+        return jsonify(message = "Can't add txn without SharedUsers"), 500
+
     paidByUser_data = tbl_users.query.filter_by(Username=txn_data["paidByUserName"]).first()
     sharedUser_data = tbl_users.query.filter(
         tbl_users.Username.in_(txn_data["sharedByUserNames"])).all()
 
-    # for user in txn_data["sharedByUserNames"]:
-    #     sharedUser_data.append(tbl_users.query.filter_by(Username=user).first())
-
     try:
         TxnTime = datetime.strptime(txn_data["timeStamp"], "%Y-%m-%dT%H:%M:%S.%fZ")
+        TxnDescription = txn_data["description"]
     except:
         TxnTime = datetime.now()
+        TxnDescription = None
 
     txn = tbl_tlist(
             EventID = event_data.EventID,
             paidByUserID = paidByUser_data.id,
-            Amount = float(txn_data["Amount"]), 
+            createdByUserID = current_user.id,
+            Amount = float(txn_data["Amount"]),
+            TxnDescription = TxnDescription,
             TxnTime = TxnTime
             )
 
     try:
+        flag_deleteTxnFailed = False
         db.session.add(txn)
         db.session.commit()
-        flag_addTxnSuccess = True
         try:
             for user in sharedUser_data:
                 txn_Shares = tbl_txnshare(txn.TxnID, user.id, event_data.EventID)
@@ -191,21 +198,30 @@ def add_txns():
             return jsonify(message = "Success", TxnID = txn.TxnID, ), 200
             
         except:
+            flag_deleteTxnFailed = True
             db.session.rollback()
             db.session.delete(txn)
             db.session.commit()
+            flag_deleteTxnFailed = False
             return jsonify(message = "Failed Adding Shares of txn. Removed Transaction"), 500
         
     except:
         db.session.rollback()
-        return jsonify(message = "Failed Adding txn"), 500
+        if not flag_deleteTxnFailed:
+            return jsonify(message = "Failed Adding txn"), 500
+        else:
+            return jsonify(message = "TXNs ADDED without SHARED USERS"), 500
 
 
 @main.route('/delete_txns', methods=["DELETE"])
-def delete_txns():
+@token_required
+def delete_txns(current_user):
     txn_id = int(request.get_json()["TxnID"])
     txn = tbl_tlist.query.get(txn_id)
-    # txn_shares = tbl_txnshare.query.filter_by(TxnID=txn_id).all()
+
+    if current_user not in txn.txn_event.event_users:
+        return jsonify(message = "You are not Authorised to delete Txn"), 403
+
 
     try:
         db.session.delete(txn)
@@ -219,9 +235,13 @@ def delete_txns():
 
 
 @main.route('/calculate/<EventName>', methods=["GET"])
-def calculate(EventName):
+@token_required
+def calculate(current_user, EventName):
 
-    event_data = tbl_events.query.filter_by(EventName=EventName).first()
+    event_data = isUserInEvent(current_user, EventName)
+    if event_data == None:
+        return jsonify(message = "Event doesn't exist or You are not Authorised "), 403
+
     # event_participants = tbl_eventusers.query.filter_by(EventID=event_data.EventID).all()
     # event_txns = tbl_tlist.query.filter_by(EventID=event_data.EventID).all()
 

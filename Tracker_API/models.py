@@ -27,20 +27,20 @@ class tbl_tlist(db.Model):
     TxnID = db.Column(db.Integer, primary_key=True)
     EventID = db.Column(db.Integer, db.ForeignKey('tbl_events.EventID'), nullable=False) #txn_event
     paidByUserID = db.Column(db.Integer, db.ForeignKey('tbl_users.id'), nullable=False) #txn_paidUser
+    createdByUserID = db.Column(db.Integer, db.ForeignKey('tbl_users.id'), nullable=False) #txn_createdUser
     Amount = db.Column(db.Float, nullable=False)
     TxnDescription = db.Column(db.String(100), nullable=True)
     TxnTime = db.Column(db.DateTime, nullable=False)
-    CreatedByUserID = db.Column(db.Integer, nullable=True)
     shared_users = db.relationship('tbl_users', secondary='tbl_txnshare', back_populates='user_txnShares', lazy=True)
 
-    def __init__(self, EventID, paidByUserID, Amount=0,
+    def __init__(self, EventID, paidByUserID, createdByUserID, Amount=0,
                     TxnDescription=None, TxnTime=datetime.now(), ):
         self.EventID = EventID
         self.paidByUserID = paidByUserID
         self.Amount = Amount
         self.TxnDescription = TxnDescription
         self.TxnTime = TxnTime
-        self.CreatedByUserID = -1 #later
+        self.createdByUserID = createdByUserID
 
 
 class tbl_users(UserMixin, db.Model):
@@ -48,13 +48,18 @@ class tbl_users(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     Username = db.Column(db.String(30), unique=True, nullable=False)
     Password = db.Column(db.String(255), nullable=False)
+    Name = db.Column(db.String(30), unique=False, nullable=False)
+    isRegistered = db.Column(db.Boolean, nullable=False)
     paid_txns = db.relationship('tbl_tlist', backref='txn_paidUser', lazy=True)
+    created_txns = db.relationship('tbl_tlist', backref='txn_createdUser', lazy=True)
     user_events = db.relationship('tbl_events', secondary='tbl_eventusers', back_populates='event_users', lazy=True)
     user_txnShares = db.relationship('tbl_tlist', secondary='tbl_txnshare', back_populates='shared_users', lazy=True)
 
-    def __init__(self, Username, Password="Password"):
+    def __init__(self, Username, Name, isRegistered, Password="Password"):
        self.Username = Username
        self.Password = Password
+       self.Name = Name
+       self.isRegistered = isRegistered
 
 
 class tbl_eventusers(db.Model):
