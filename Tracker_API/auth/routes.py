@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from . import auth
 from .. import db
 from ..models import tbl_users
@@ -25,12 +25,12 @@ def login():
     if check_password_hash(user.Password, form_data["Password"]):
         token = jwt.encode({
                             'Username' : user.Username, 
-                            'exp' : datetime.utcnow() + datetime.timedelta(minutes=30)
+                            'exp' : datetime.utcnow() + timedelta(minutes=30)
                             },
                         current_app.config['SECRET_KEY']
                         )
-
-        return jsonify({'token' : token.decode('UTF-8')}), 200
+        print(token)
+        return jsonify({'token' : token}), 200
 
     return make_response('Could not verify', 401, {'WWW-Authenticate' : 'Basic realm="Login required!"'})
 
