@@ -25,7 +25,7 @@ def login():
     if check_password_hash(user.Password, form_data["Password"]):
         token = jwt.encode({
                             'Username' : user.Username, 
-                            'exp' : datetime.utcnow() + timedelta(minutes=30)
+                            'exp' : datetime.utcnow() + timedelta(seconds=30)
                             },
                         current_app.config['SECRET_KEY'],
                         algorithm="HS256"
