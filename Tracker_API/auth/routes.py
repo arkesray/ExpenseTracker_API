@@ -61,8 +61,11 @@ def create_user():
 def create_guest_user():
     form_data = request.get_json()
 
+    hashed_password = generate_password_hash("Password", method='sha256')
+
     new_guest_user = tbl_users(
                         Username=form_data['Username'],
+                        Password=hashed_password,
                         Name='',
                         isRegistered=False   
     )

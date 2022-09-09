@@ -54,7 +54,7 @@ class tbl_users(UserMixin, db.Model):
     user_events = db.relationship('tbl_events', secondary='tbl_eventusers', back_populates='event_users', lazy=True)
     user_txnShares = db.relationship('tbl_tlist', secondary='tbl_txnshare', back_populates='shared_users', lazy=True)
 
-    def __init__(self, Username, Name, isRegistered, Password="Password"):
+    def __init__(self, Username, Name, isRegistered, Password):
        self.Username = Username
        self.Password = Password
        self.Name = Name
