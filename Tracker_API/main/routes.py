@@ -106,7 +106,7 @@ def add_event(current_user):
                     JoinTime=datetime.now()
                 )
             event.NumberOfMembers += 1
-            db.session(newEventUser)
+            db.session.add(newEventUser)
             db.session.commit()
             return jsonify(eventID = event.EventID), 200
 
