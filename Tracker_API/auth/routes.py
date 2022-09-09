@@ -30,7 +30,7 @@ def login():
                         current_app.config['SECRET_KEY'],
                         algorithm="HS256"
                         )
-        return jsonify({'token' : token}), 200
+        return jsonify({'token' : token, 'expires_at' : datetime.utcnow() + timedelta(seconds=30)}), 200
 
     return make_response('Could not verify', 401, {'WWW-Authenticate' : 'Basic realm="Login required!"'})
 
