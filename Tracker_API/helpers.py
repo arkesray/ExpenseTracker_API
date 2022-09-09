@@ -5,6 +5,14 @@ from functools import wraps
 import jwt
 
 
+def isUserInEvent(this_user, this_eventName):
+    all_User_events = this_user.user_events
+    for event in all_User_events:
+        if event.EventName == this_eventName:
+            return event
+    return None
+    
+
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):

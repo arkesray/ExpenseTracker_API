@@ -4,15 +4,8 @@ from .. import db
 from ..models import tbl_events, tbl_tlist, tbl_txnshare, tbl_users, tbl_eventusers
 from flask import request, jsonify, make_response
 
-from ..helpers import expenseCalculator, token_required
+from ..helpers import expenseCalculator, token_required, isUserInEvent
 import json
-
-def isUserInEvent(this_user, this_eventName):
-    all_User_events = this_user.user_events
-    for event in all_User_events:
-        if event.EventName == this_eventName:
-            return event
-    return None
 
 
 @main.route('/fetch_participants', methods=["GET"])
@@ -23,10 +16,7 @@ def fetch_participants():
     for person in all_participants:
         temp_persons.append({"id" : person.id, "username" : person.Username})
 
-    return make_response(
-            jsonify(Participants = temp_persons),
-            200,
-        )
+    return make_response(jsonify(Participants = temp_persons), 200)
 
 
 @main.route('/fetch_events', methods=["GET"])
@@ -38,10 +28,7 @@ def fetch_events(current_user):
     for event in all_User_events:
         temp_events.append({"EventID" : event.EventID, "EventName" : event.EventName})
     
-    return make_response(
-            jsonify(Events = temp_events),
-            200,
-        ) 
+    return make_response(jsonify(Events = temp_events), 200) 
 
 
 @main.route('/fetch_event_participants/<EventName>', methods=["GET"])
@@ -80,10 +67,7 @@ def fetch_txns(current_user, EventName):
             "TxnTime" : txn.TxnTime,
         })
 
-    return make_response(
-            jsonify(txns = temp_txns),
-            200,
-        )
+    return make_response(jsonify(txns = temp_txns), 200)
 
 
 @main.route('/add_event', methods=["PUT"])
@@ -94,7 +78,6 @@ def add_event(current_user):
         EventName=event_data["eventName"],
         EventDescription=event_data["eventDescription"]
     )
-
     try:
         flag_deleteEventFailed = False
         db.session.add(event)
@@ -102,14 +85,12 @@ def add_event(current_user):
         try:
             newEventUser = tbl_eventusers(
                     EventID=event.EventID,
-                    UserID=current_user.id,
-                    JoinTime=datetime.now()
+                    UserID=current_user.id
                 )
             event.NumberOfMembers += 1
             db.session.add(newEventUser)
             db.session.commit()
             return jsonify(eventID = event.EventID), 200
-
         except:
             flag_deleteEventFailed = True
             db.session.rollback()
@@ -137,8 +118,7 @@ def add_participant2event(current_user):
     
     try:
         for participant in participants:
-            newEventUser = tbl_eventusers(EventID=event_data.EventID, UserID=participant.id, 
-                                            JoinTime=datetime.now())
+            newEventUser = tbl_eventusers(EventID=event_data.EventID, UserID=participant.id)
             db.session.add(newEventUser)
 
         event_data.NumberOfMembers += len(participant2event_data["participantList"])
@@ -173,7 +153,7 @@ def add_txns(current_user):
         TxnTime = datetime.strptime(txn_data["timeStamp"], "%Y-%m-%dT%H:%M:%S.%fZ")
         TxnDescription = txn_data["description"]
     except:
-        TxnTime = datetime.now()
+        TxnTime = datetime.utcnow()
         TxnDescription = None
 
     txn = tbl_tlist(
@@ -196,7 +176,6 @@ def add_txns(current_user):
 
             db.session.commit()
             return jsonify(message = "Success", TxnID = txn.TxnID, ), 200
-            
         except:
             flag_deleteTxnFailed = True
             db.session.rollback()
@@ -222,14 +201,12 @@ def delete_txns(current_user):
     if current_user not in txn.txn_event.event_users:
         return jsonify(message = "You are not Authorised to delete Txn"), 403
 
-
     try:
         db.session.delete(txn)
         # for txn_share in txn_shares:
         #     db.session.delete(txn_share)
         db.session.commit()
         return jsonify({'message' : "Success"}), 200
-        #get all event-txns and return
     except:
         return jsonify({'message' : "Failed to delete"}), 500
 
@@ -241,9 +218,6 @@ def calculate(current_user, EventName):
     event_data = isUserInEvent(current_user, EventName)
     if event_data == None:
         return jsonify(message = "Event doesn't exist or You are not Authorised "), 403
-
-    # event_participants = tbl_eventusers.query.filter_by(EventID=event_data.EventID).all()
-    # event_txns = tbl_tlist.query.filter_by(EventID=event_data.EventID).all()
 
     numberOfParticipants = len(event_data.event_users)
     person_mapping, person_mapping_rev = {}, {}
