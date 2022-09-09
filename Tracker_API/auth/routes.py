@@ -1,4 +1,10 @@
 from datetime import datetime, timedelta
+# import pytz
+  
+# # it will get the time zone 
+# # of the specified location
+# IST = pytz.timezone('Asia/Kolkata')
+
 from . import auth
 from .. import db
 from ..models import tbl_users
@@ -25,12 +31,12 @@ def login():
     if check_password_hash(user.Password, form_data["Password"]):
         token = jwt.encode({
                             'Username' : user.Username, 
-                            'exp' : datetime.utcnow() + timedelta(seconds=30)
+                            'exp' : datetime.now() + timedelta(seconds=30)
                             },
                         current_app.config['SECRET_KEY'],
                         algorithm="HS256"
                         )
-        return jsonify({'token' : token, 'expires_at' : datetime.utcnow() + timedelta(seconds=30)}), 200
+        return jsonify({'token' : token, 'expires_at' : datetime.now() + timedelta(seconds=30)}), 200
 
     return make_response('Could not verify', 401, {'WWW-Authenticate' : 'Basic realm="Login required!"'})
 
