@@ -1,13 +1,12 @@
 from .models import tbl_users
-from flask import request, jsonify, make_response, current_app
+from flask import request, jsonify, current_app
 from functools import wraps
 
 import jwt
 
 
 def isUserInEvent(this_user, this_eventName):
-    all_User_events = this_user.user_events
-    for event in all_User_events:
+    for event in this_user.user_events:
         if event.EventName == this_eventName:
             return event
     return None

@@ -5,12 +5,11 @@ from ..models import tbl_events, tbl_tlist, tbl_txnshare, tbl_users, tbl_eventus
 from flask import request, jsonify, make_response
 
 from ..helpers import expenseCalculator, token_required, isUserInEvent
-import json
 
-
-@main.route('/fetch_participants', methods=["GET"])
-def fetch_participants():
-    all_participants = tbl_users.query.all()
+@main.route('/fetch_participants', defaults={'search': ''}, methods=["GET"])
+@main.route('/fetch_participants/<search>', methods=["GET"])
+def fetch_participants(search):
+    all_participants = tbl_users.query.filter(tbl_users.Username.like("%{}%".format(search))).all()
 
     temp_persons = []
     for person in all_participants:
@@ -142,12 +141,23 @@ def add_txns(current_user):
     if event_data == None:
         return jsonify(message = "Event doesn't exist or You are not Authorised "), 403
 
-    if len(txn_data["sharedByUserNames"]) == 0:
-        return jsonify(message = "Can't add txn without SharedUsers"), 500
-
     paidByUser_data = tbl_users.query.filter_by(Username=txn_data["paidByUserName"]).first()
+
+    if paidByUser_data:
+        if not isUserInEvent(paidByUser_data, event_data):
+            return jsonify(message = "Paid By User not in event"), 500 
+    else:
+        return jsonify(message = "Paid By User doesn't exists"), 500
+
     sharedUser_data = tbl_users.query.filter(
         tbl_users.Username.in_(txn_data["sharedByUserNames"])).all()
+    
+    if len(txn_data["sharedByUserNames"]) == 0 or len(txn_data["sharedByUserNames"]) != len(sharedUser_data):
+        return jsonify(message = "Can't add txn without SharedUsers or Missing Shared User"), 500
+
+    for sharedUser in sharedUser_data:
+        if sharedUser not in event_data.event_users:
+            return jsonify(message = "SharedUsers not found in Event"), 500
 
     try:
         TxnTime = datetime.strptime(txn_data["timeStamp"], "%Y-%m-%dT%H:%M:%S.%fZ")
