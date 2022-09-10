@@ -1,3 +1,40 @@
+from .models import tbl_users
+from flask import request, jsonify, make_response, current_app
+from functools import wraps
+
+import jwt
+
+
+def isUserInEvent(this_user, this_eventName):
+    all_User_events = this_user.user_events
+    for event in all_User_events:
+        if event.EventName == this_eventName:
+            return event
+    return None
+    
+
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = None
+
+        if 'x-access-token' in request.headers:
+            token = request.headers['x-access-token']
+
+        if not token:
+            return jsonify({'message' : 'Token is missing!'}), 401
+
+        try: 
+            data = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=["HS256"])
+            current_user = tbl_users.query.filter_by(Username=data['Username']).first()
+        except:
+            return jsonify({'message' : 'Token is invalid!'}), 401
+
+        return f(current_user, *args, **kwargs)
+
+    return decorated
+
+
 def expenseCalculator(person, txn) :
     txnNo = len(txn)
     liab = [0.0]*person
