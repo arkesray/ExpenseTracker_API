@@ -4,12 +4,15 @@ from .. import db
 from ..models import tbl_events, tbl_tlist, tbl_txnshare, tbl_users, tbl_eventusers
 from flask import request, jsonify, make_response
 
-from ..helpers import expenseCalculator, token_required, isUserInEvent
+from .exp import calcLiability
+from .expense import expenseCalculator
+from ..helpers import token_required, isUserInEvent
 
 @main.route('/fetch_participants', defaults={'search': ''}, methods=["GET"])
 @main.route('/fetch_participants/<search>', methods=["GET"])
 def fetch_participants(search):
-    all_participants = tbl_users.query.filter(tbl_users.Username.like("%{}%".format(search))).all()
+    # event_data = tbl_events.q
+    all_participants = tbl_users.query.filter(tbl_users.Username.ilike("%{}%".format(search))).all()
 
     temp_persons = []
     for person in all_participants:
@@ -247,7 +250,14 @@ def calculate(current_user, EventName):
                      "".join([str(v) for v in bin_str])
                 ])
     
-    pendingTxns = expenseCalculator(numberOfParticipants, txns)
+    liabilities = calcLiability(numberOfParticipants, txns)
+    pendingTxns = expenseCalculator(liabilities)
+
+    temp_liability = []
+    for user_liability in liabilities:
+        user = tbl_users.query.filter_by(id=person_mapping_rev[user_liability[1]]).first()
+        temp_liability.append([user.Username , user_liability[0]])
+
 
     temp_pendingTxns = []
     for pendingTxn in pendingTxns:
@@ -257,6 +267,7 @@ def calculate(current_user, EventName):
 
     response = {
         "eventID" : event_data.EventID,
+        "liabilities" : temp_liability,
         "transactionDetails" : temp_pendingTxns
     }
 
