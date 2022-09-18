@@ -3,6 +3,8 @@ from . import main
 from .. import db
 from ..models import tbl_events, tbl_tlist, tbl_txnshare, tbl_users, tbl_eventusers
 from flask import request, jsonify, make_response
+from .exp import calcLiability
+from .expense import expenseCalculator
 
 from ..helpers import expenseCalculator, token_required, isUserInEvent
 import json
@@ -237,7 +239,8 @@ def calculate(current_user, EventName):
                      "".join([str(v) for v in bin_str])
                 ])
     
-    pendingTxns = expenseCalculator(numberOfParticipants, txns)
+    liability = calcLiability(numberOfParticipants, txns)
+    pendingTxns = expenseCalculator(liability)
 
     temp_pendingTxns = []
     for pendingTxn in pendingTxns:
