@@ -149,7 +149,7 @@ def add_txns(current_user):
     paidByUser_data = tbl_users.query.filter_by(Username=txn_data["paidByUserName"]).first()
 
     if paidByUser_data:
-        if not isUserInEvent(paidByUser_data, event_data):
+        if not isUserInEvent(paidByUser_data, event_data.EventName):
             return jsonify(message = "Paid By User not in event"), 500 
     else:
         return jsonify(message = "Paid By User doesn't exists"), 500
