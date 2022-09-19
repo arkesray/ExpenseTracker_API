@@ -243,7 +243,7 @@ def get_liability(current_user, EventName, UserName):
                 "eventName" : EventName,
                 "userID" : userRecord.UserID,
                 "userName" : UserName,
-                "userRecord" : userRecord.Liability
+                "userLiability" : userRecord.Liability
     }
 
     return jsonify(response), 200
@@ -276,8 +276,7 @@ def calculate(current_user, EventName):
                 ])
     
     liabilities = calcLiability(numberOfParticipants, txns)
-    pendingTxns = expenseCalculator(liabilities)
-
+    pendingTxns = expenseCalculator(liabilities[:])
     for user_liability in liabilities:
         userRecord = tbl_eventusers.query.filter_by(
             UserID=person_mapping_rev[user_liability[1]], 
