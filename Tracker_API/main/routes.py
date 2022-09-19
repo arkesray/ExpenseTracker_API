@@ -226,6 +226,29 @@ def delete_txns(current_user):
         return jsonify({'message' : "Failed to delete"}), 500
 
 
+@main.route('/get_liability/<EventName>/<UserName>', methods=["GET"])
+@token_required
+def get_liability(current_user, EventName, UserName):
+
+    event_data = isUserInEvent(current_user, EventName)
+    if event_data == None:
+        return jsonify(message = "Event doesn't exist or You are not Authorised "), 403
+
+    user = tbl_users.query.filter_by(Username=UserName).first()
+    userRecord = tbl_eventusers.query.filter_by(
+            UserID=user.id, 
+            EventID=event_data.EventID).first()
+    
+    response = {"eventID" : userRecord.EventID,
+                "eventName" : EventName,
+                "userID" : userRecord.UserID,
+                "userName" : UserName,
+                "userRecord" : userRecord.Liability
+    }
+
+    return jsonify(response), 200
+
+
 @main.route('/calculate/<EventName>', methods=["GET"])
 @token_required
 def calculate(current_user, EventName):
@@ -255,6 +278,18 @@ def calculate(current_user, EventName):
     liabilities = calcLiability(numberOfParticipants, txns)
     pendingTxns = expenseCalculator(liabilities)
 
+    for user_liability in liabilities:
+        userRecord = tbl_eventusers.query.filter_by(
+            UserID=person_mapping_rev[user_liability[1]], 
+            EventID=event_data.EventID).first()
+        if userRecord:
+            userRecord.Liability = user_liability[0]
+            try:
+                db.session.commit()
+            except:
+                db.session.rollback()
+    
+
     temp_liability = []
     for user_liability in liabilities:
         user = tbl_users.query.filter_by(id=person_mapping_rev[user_liability[1]]).first()
@@ -269,7 +304,7 @@ def calculate(current_user, EventName):
 
     response = {
         "eventID" : event_data.EventID,
-        "liabilities" : temp_liability,
+        # "liabilities" : temp_liability,
         "transactionDetails" : temp_pendingTxns
     }
 
