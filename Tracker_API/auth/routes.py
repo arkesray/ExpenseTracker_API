@@ -76,4 +76,4 @@ def create_guest_user():
         db.session.rollback()
         return jsonify({'message' : 'Cant Create Guest User'}), 500
 
-    return jsonify({'message' : 'New Guest user created!'}), 200
+    return jsonify({'id' : new_guest_user.id, 'username' : new_guest_user.Username, 'message' : 'New Guest user created!'}), 200
