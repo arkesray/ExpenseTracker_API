@@ -28,7 +28,9 @@ def fetch_events(current_user):
 
     temp_events = []
     for event in all_User_events:
-        temp_events.append({"EventID" : event.EventID, "EventName" : event.EventName})
+        temp_events.append({"EventID" : event.EventID, 
+                            "EventName" : event.EventName,
+                            "EventTime" : event.EventTime,})
     
     return make_response(jsonify(Events = temp_events), 200) 
 
