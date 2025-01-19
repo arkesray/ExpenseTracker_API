@@ -66,11 +66,13 @@ class tbl_eventusers(db.Model):
     EventID = db.Column(db.Integer, db.ForeignKey('tbl_events.EventID'), primary_key=True, nullable=False) #event
     UserID = db.Column(db.Integer, db.ForeignKey('tbl_users.id'), primary_key=True, nullable=False) #user
     JoinTime = db.Column(db.DateTime(timezone=True), nullable=False)
+    Liability = db.Column(db.Float, nullable=False)
 
-    def __init__(self, EventID, UserID, JoinTime=datetime.utcnow()):
+    def __init__(self, EventID, UserID, JoinTime=datetime.utcnow(), Liability=0.0):
         self.EventID = EventID
         self.UserID = UserID
         self.JoinTime = JoinTime
+        self.Liability = Liability
 
 class tbl_txnshare(db.Model):
     __tablename___ = 'tbl_txnshare'

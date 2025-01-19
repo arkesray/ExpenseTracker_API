@@ -38,8 +38,6 @@ def expenseCalculator(payable) :
             print("Something went wrong.")
             break
 
-    print(groups)
-
     for grp in groups :
         maxPay = max(grp)
         maxPayInd = grp.index(maxPay)
