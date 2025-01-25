@@ -80,7 +80,8 @@ def add_event(current_user):
     event_data = request.get_json()
     event = tbl_events(
         EventName=event_data["eventName"],
-        EventDescription=event_data["eventDescription"]
+        EventDescription=event_data["eventDescription"],
+        EventTime=datetime.datetime.utcnow()
     )
     try:
         flag_deleteEventFailed = False
