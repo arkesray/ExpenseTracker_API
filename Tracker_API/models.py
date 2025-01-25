@@ -14,7 +14,7 @@ class tbl_events(db.Model):
     event_txnShare = db.relationship('tbl_txnshare', backref='txnShare_event', lazy=True)
 
     def __init__(self, EventName, EventDescription=None, NumberOfMembers=0,
-                     EventTime=datetime.utcnow(), ):
+                     EventTime=datetime.utcnow, ):
         self.EventName = EventName
         self.EventDescription = EventDescription
         self.NumberOfMembers = NumberOfMembers
