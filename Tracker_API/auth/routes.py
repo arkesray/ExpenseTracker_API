@@ -23,15 +23,15 @@ def login():
     if not user:
         return make_response('User not found', 401, {'WWW-Authenticate' : 'Basic realm="Login required!"'})
 
-    if check_password_hash(user.Password, form_data["Password"]):
+    if check_password_hash(user.Password, form_data["Password"], ):
         token = jwt.encode({
                             'Username' : user.Username, 
-                            'exp' : datetime.utcnow() + timedelta(minutes=30)
+                            'exp' : datetime.utcnow() + timedelta(days=10)
                             },
                         current_app.config['SECRET_KEY'],
                         algorithm="HS256"
                         )
-        return jsonify({'token' : token, 'expires_at' : datetime.utcnow() + timedelta(minutes=30)}), 200
+        return jsonify({'token' : token, 'expires_at' : datetime.utcnow() + timedelta(days=10)}), 200
 
     return make_response('Could not verify', 401, {'WWW-Authenticate' : 'Basic realm="Login required!"'})
 
@@ -39,7 +39,7 @@ def login():
 @auth.route('/register', methods=['POST'])
 def create_user():
     form_data = request.get_json()
-    hashed_password = generate_password_hash(form_data['Password'], method='sha256')
+    hashed_password = generate_password_hash(form_data['Password'], method='pbkdf2:sha256')
 
     new_user = tbl_users(
                     Username=form_data['Username'],

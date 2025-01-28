@@ -16,7 +16,7 @@ def fetch_participants(search):
 
     temp_persons = []
     for person in all_participants:
-        temp_persons.append({"id" : person.id, "username" : person.Username})
+        temp_persons.append({"id" : person.id, "username" : person.Username, "joinedon":""})
 
     return make_response(jsonify(Participants = temp_persons), 200)
 
@@ -30,7 +30,9 @@ def fetch_events(current_user):
     for event in all_User_events:
         temp_events.append({"EventID" : event.EventID, 
                             "EventName" : event.EventName,
-                            "EventTime" : event.EventTime,})
+                            "EventTime" : event.EventTime,
+                            "EventDescription" : event.EventDescription,
+                            })
     
     return make_response(jsonify(Events = temp_events), 200) 
 
@@ -44,7 +46,11 @@ def fetch_event_participants(current_user, EventName):
 
     temp_persons = []
     for user in event_data.event_users:
-        temp_persons.append({"id" : user.id, "username" : user.Username})
+        eventuser_data = tbl_eventusers.query.filter(
+                                    tbl_eventusers.EventID == event_data.EventID,
+                                    tbl_eventusers.UserID == user.id).one()
+        temp_persons.append({"id" : user.id, "username" : user.Username,
+                              "joinedon" : eventuser_data.JoinTime})
 
     return make_response(
             jsonify(EventID = event_data.EventID, EventParticipants = temp_persons),
@@ -69,6 +75,7 @@ def fetch_txns(current_user, EventName):
             "sharedByUserNames" : [txn_sharedUser.Username for txn_sharedUser in txn.shared_users],
             "TxnDescription" : txn.TxnDescription,
             "TxnTime" : txn.TxnTime,
+            "TxnAddedBy" : txn.txn_createdUser.Username,
         })
 
     return make_response(jsonify(txns = temp_txns), 200)
@@ -81,7 +88,7 @@ def add_event(current_user):
     event = tbl_events(
         EventName=event_data["eventName"],
         EventDescription=event_data["eventDescription"],
-        EventTime=datetime.datetime.utcnow()
+        EventTime=datetime.utcnow()
     )
     try:
         flag_deleteEventFailed = False
@@ -90,7 +97,8 @@ def add_event(current_user):
         try:
             newEventUser = tbl_eventusers(
                     EventID=event.EventID,
-                    UserID=current_user.id
+                    UserID=current_user.id,
+                    JoinTime=datetime.utcnow()
                 )
             event.NumberOfMembers += 1
             db.session.add(newEventUser)
@@ -123,7 +131,8 @@ def add_participant2event(current_user):
     
     try:
         for participant in participants:
-            newEventUser = tbl_eventusers(EventID=event_data.EventID, UserID=participant.id)
+            newEventUser = tbl_eventusers(EventID=event_data.EventID, UserID=participant.id, 
+                    JoinTime=datetime.utcnow())
             db.session.add(newEventUser)
 
         event_data.NumberOfMembers += len(participant2event_data["participantList"])
@@ -157,7 +166,7 @@ def add_txns(current_user):
 
     sharedUser_data = tbl_users.query.filter(
         tbl_users.Username.in_(txn_data["sharedByUserNames"])).all()
-    
+
     if len(txn_data["sharedByUserNames"]) == 0 or len(txn_data["sharedByUserNames"]) != len(sharedUser_data):
         return jsonify(message = "Can't add txn without SharedUsers or Missing Shared User"), 500
 
@@ -167,17 +176,15 @@ def add_txns(current_user):
 
     try:
         TxnTime = datetime.strptime(txn_data["timeStamp"], "%Y-%m-%dT%H:%M:%S.%fZ")
-        TxnDescription = txn_data["description"]
     except:
         TxnTime = datetime.utcnow()
-        TxnDescription = None
 
     txn = tbl_tlist(
             EventID = event_data.EventID,
             paidByUserID = paidByUser_data.id,
             createdByUserID = current_user.id,
             Amount = float(txn_data["Amount"]),
-            TxnDescription = TxnDescription,
+            TxnDescription = txn_data["description"],
             TxnTime = TxnTime
             )
 
