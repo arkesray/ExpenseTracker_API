@@ -4,9 +4,9 @@ from .. import db
 from ..models import tbl_events, tbl_tlist, tbl_txnshare, tbl_users, tbl_eventusers
 from flask import request, jsonify, make_response
 
-from .exp import calcLiability
-from .expense import expenseCalculator
-from ..helpers import token_required, isUserInEvent
+# from .exp import 
+from .expense import expenseCalculator, calcLiability
+from ..helpers import token_required, isUserInEvent, get_participant_dues
 
 @main.route('/fetch_participants', defaults={'search': ''}, methods=["GET"])
 @main.route('/fetch_participants/<search>', methods=["GET"])
@@ -32,6 +32,8 @@ def fetch_events(current_user):
                             "EventName" : event.EventName,
                             "EventTime" : event.EventTime,
                             "EventDescription" : event.EventDescription,
+                            "TotalExpense" : event.TotalExpense,
+                            "EventOwner" : current_user.Username,
                             })
     
     return make_response(jsonify(Events = temp_events), 200) 
@@ -87,6 +89,7 @@ def add_event(current_user):
     event_data = request.get_json()
     event = tbl_events(
         EventName=event_data["eventName"],
+        EventOwner=current_user.id,
         EventDescription=event_data["eventDescription"],
         EventTime=datetime.utcnow()
     )
@@ -194,9 +197,10 @@ def add_txns(current_user):
         db.session.commit()
         try:
             for user in sharedUser_data:
-                txn_Shares = tbl_txnshare(txn.TxnID, user.id, event_data.EventID)
+                txn_Shares = tbl_txnshare(txn.TxnID, user.id, float(txn_data["Amount"])/len(sharedUser_data), event_data.EventID)
                 db.session.add(txn_Shares)
-
+            
+            event_data.updateTotalExpense()
             db.session.commit()
             return jsonify(message = "Success", TxnID = txn.TxnID, ), 200
         except:
@@ -316,3 +320,23 @@ def calculate(current_user, EventName):
     }
 
     return jsonify(response), 200
+
+
+@main.route('/fetch_event_analytics/<EventName>', methods=["GET"])
+@token_required
+def fetch_event_analytics(current_user, EventName):
+
+    event_data = isUserInEvent(current_user, EventName)
+    temp_persons = {}
+    for user in event_data.event_users:
+        temp_persons[user.id] = user.Username
+    
+    response = []
+    memberDues = get_participant_dues(event_data.EventID, db.engine)
+    for userID in memberDues:
+        temp_memberDue = {}
+        temp_memberDue['Username'] = temp_persons[userID]
+        temp_memberDue.update(memberDues[userID])
+        response.append(temp_memberDue)
+
+    return make_response(jsonify(memberDues = response), 200)

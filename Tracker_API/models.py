@@ -7,18 +7,28 @@ class tbl_events(db.Model):
     EventID = db.Column(db.Integer, primary_key=True)
     EventName = db.Column(db.String(100), unique=True, nullable=False)
     EventDescription = db.Column(db.String(100), nullable=True)
-    NumberOfMembers = db.Column(db.Integer, nullable=False)
     EventTime = db.Column(db.DateTime(timezone=True), nullable=False)
+    EventOwner = db.Column(db.Integer, db.ForeignKey('tbl_users.id'), nullable=False)
+    NumberOfMembers = db.Column(db.Integer, nullable=False)
+    TotalExpense = db.Column(db.Float, nullable=False)
     txns = db.relationship('tbl_tlist', backref='txn_event', lazy=True)
     event_users = db.relationship('tbl_users', secondary='tbl_eventusers', back_populates='user_events', lazy=True)
     event_txnShare = db.relationship('tbl_txnshare', backref='txnShare_event', lazy=True)
 
-    def __init__(self, EventName, EventDescription=None, NumberOfMembers=0,
-                     EventTime=datetime.utcnow, ):
+    def __init__(self, EventName, EventOwner, EventDescription=None, EventTime=datetime.utcnow(),
+                  NumberOfMembers=0, TotalExpense=0.0):
         self.EventName = EventName
+        self.EventOwner = EventOwner
         self.EventDescription = EventDescription
         self.NumberOfMembers = NumberOfMembers
+        self.TotalExpense = TotalExpense
         self.EventTime = EventTime
+    
+    def updateTotalExpense(self,):
+        self.TotalExpense = sum([txn.Amount for txn in self.txns])
+
+    def updateTotalMembers(self,):
+        self.NumberOfMembers = len(self.event_users)
 
 
 class tbl_tlist(db.Model):
@@ -79,9 +89,11 @@ class tbl_txnshare(db.Model):
     TxnID = db.Column(db.Integer, db.ForeignKey('tbl_tlist.TxnID'), primary_key=True, nullable=False)
     UserID = db.Column(db.Integer, db.ForeignKey('tbl_users.id'), primary_key=True, nullable=False)
     EventID = db.Column(db.Integer, db.ForeignKey('tbl_events.EventID'), nullable=True)
+    AvgAmount = db.Column(db.Float, nullable=False)
 
-    def __init__(self, TxnID, UserID, EventID=None):
+    def __init__(self, TxnID, UserID, AvgAmount, EventID=None):
         self.TxnID = TxnID
         self.UserID = UserID
+        self.AvgAmount = AvgAmount
         self.EventID = EventID
     
