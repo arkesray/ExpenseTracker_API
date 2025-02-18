@@ -1,4 +1,3 @@
-from datetime import datetime
 from . import main
 from .. import db
 from ..models import tbl_events, tbl_tlist, tbl_txnshare, tbl_users, tbl_eventusers
@@ -91,7 +90,6 @@ def add_event(current_user):
         EventName=event_data["eventName"],
         EventOwner=current_user.id,
         EventDescription=event_data["eventDescription"],
-        EventTime=datetime.utcnow()
     )
     try:
         flag_deleteEventFailed = False
@@ -101,19 +99,20 @@ def add_event(current_user):
             newEventUser = tbl_eventusers(
                     EventID=event.EventID,
                     UserID=current_user.id,
-                    JoinTime=datetime.utcnow()
                 )
             event.NumberOfMembers += 1
             db.session.add(newEventUser)
             db.session.commit()
             return jsonify(eventID = event.EventID), 200
-        except:
+        except Exception as e:
+            print("failed", e)
             flag_deleteEventFailed = True
             db.session.rollback()
             db.session.delete(event)
             db.session.commit()
             return jsonify(message = "Error Adding CreatedByUser to Event. Event Deleted!!!"), 500
-    except:
+    except Exception as e:
+        print("failed", e)
         db.session.rollback()
         if not flag_deleteEventFailed:
             return jsonify(message = "Error Adding New Event"), 500
@@ -134,8 +133,7 @@ def add_participant2event(current_user):
     
     try:
         for participant in participants:
-            newEventUser = tbl_eventusers(EventID=event_data.EventID, UserID=participant.id, 
-                    JoinTime=datetime.utcnow())
+            newEventUser = tbl_eventusers(EventID=event_data.EventID, UserID=participant.id,)
             db.session.add(newEventUser)
 
         event_data.NumberOfMembers += len(participant2event_data["participantList"])
@@ -177,10 +175,6 @@ def add_txns(current_user):
         if sharedUser not in event_data.event_users:
             return jsonify(message = "SharedUsers not found in Event"), 500
 
-    try:
-        TxnTime = datetime.strptime(txn_data["timeStamp"], "%Y-%m-%dT%H:%M:%S.%fZ")
-    except:
-        TxnTime = datetime.utcnow()
 
     txn = tbl_tlist(
             EventID = event_data.EventID,
@@ -188,7 +182,6 @@ def add_txns(current_user):
             createdByUserID = current_user.id,
             Amount = float(txn_data["Amount"]),
             TxnDescription = txn_data["description"],
-            TxnTime = TxnTime
             )
 
     try:
@@ -338,5 +331,9 @@ def fetch_event_analytics(current_user, EventName):
         temp_memberDue['Username'] = temp_persons[userID]
         temp_memberDue.update(memberDues[userID])
         response.append(temp_memberDue)
+    
+    sqOffTxns = [{"sender" : "Username1", "receiver" : "Username2", "Amount": 20.00},
+             {"sender" : "Username3", "receiver" : "Username4", "Amount": 10.00},
+            ]
 
-    return make_response(jsonify(memberDues = response), 200)
+    return make_response(jsonify(memberDues = response, squareOffs = sqOffTxns), 200)
