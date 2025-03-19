@@ -5,7 +5,7 @@ from flask import request, jsonify, make_response
 
 # from .exp import 
 from .expense import expenseCalculator, calcLiability
-from ..helpers import token_required, isUserInEvent, get_participant_dues
+from ..helpers import token_required, isUserInEvent, get_participant_Expense
 
 @main.route('/fetch_participants', defaults={'search': ''}, methods=["GET"])
 @main.route('/fetch_participants/<search>', methods=["GET"])
@@ -324,16 +324,21 @@ def fetch_event_analytics(current_user, EventName):
     for user in event_data.event_users:
         temp_persons[user.id] = user.Username
     
-    response = []
-    memberDues = get_participant_dues(event_data.EventID, db.engine)
+    response, sqOffTxns = [], []
+    result = get_participant_Expense(event_data.EventID, db.engine)
+    memberDues = result["GUI"]
     for userID in memberDues:
         temp_memberDue = {}
         temp_memberDue['Username'] = temp_persons[userID]
         temp_memberDue.update(memberDues[userID])
         response.append(temp_memberDue)
     
-    sqOffTxns = [{"sender" : "Username1", "receiver" : "Username2", "Amount": 20.00},
-             {"sender" : "Username3", "receiver" : "Username4", "Amount": 10.00},
-            ]
+    squareOffs = result["SqOffs"]
+    for sq in squareOffs:
+        temp_SqOff = {}
+        temp_SqOff["sender"] = temp_persons[sq[0]]
+        temp_SqOff["receiver"] = temp_persons[sq[1]]
+        temp_SqOff["Amount"] = sq[2]
+        sqOffTxns.append(temp_SqOff)
 
     return make_response(jsonify(memberDues = response, squareOffs = sqOffTxns), 200)
