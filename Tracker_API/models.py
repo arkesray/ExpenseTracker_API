@@ -6,7 +6,7 @@ from . import db
 class tbl_events(db.Model):
     __tablename___ = 'tbl_events'
     EventID = db.Column(db.Integer, primary_key=True)
-    EventName = db.Column(db.String(100), unique=True, nullable=False)
+    EventName = db.Column(db.String(10), unique=True, nullable=False)
     EventDescription = db.Column(db.String(100), nullable=True)
     # EventTime = db.Column(db.DateTime(timezone=True), nullable=False,)
     EventTime: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.now(datetime.UTC))
