@@ -30,7 +30,7 @@ class tbl_events(db.Model):
         self.TotalExpense = TotalExpense
     
     def updateTotalExpense(self,):
-        self.TotalExpense = sum([txn.Amount for txn in self.txns])
+        self.TotalExpense = sum([txn.Amount if txn.isExpense else 0 for txn in self.txns])
 
     def updateTotalMembers(self,):
         self.NumberOfMembers = len(self.event_users)
@@ -47,17 +47,19 @@ class tbl_tlist(db.Model):
     createdByUserID = db.Column(db.Integer, db.ForeignKey('tbl_users.id'), nullable=False) #txn_createdUser
     Amount = db.Column(db.Float, nullable=False)
     TxnDescription = db.Column(db.String(100), nullable=True)
+    isExpense = db.Column(db.Boolean, nullable=False)
     # TxnTime = db.Column(db.DateTime(timezone=True), nullable=False)
     TxnTime: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.now(datetime.UTC))
     shared_users = db.relationship('tbl_users', secondary='tbl_txnshare', back_populates='user_txnShares', lazy=True)
 
-    def __init__(self, EventID, paidByUserID, createdByUserID, Amount=0,
+    def __init__(self, EventID, paidByUserID, createdByUserID, isExpense=True, Amount=0,
                     TxnDescription=None,):
         self.EventID = EventID
         self.paidByUserID = paidByUserID
         self.Amount = Amount
         self.TxnDescription = TxnDescription
         self.createdByUserID = createdByUserID
+        self.isExpense = isExpense
 
 
 class tbl_users(UserMixin, db.Model):

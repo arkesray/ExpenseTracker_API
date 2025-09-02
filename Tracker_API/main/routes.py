@@ -182,6 +182,7 @@ def add_txns(current_user):
             createdByUserID = current_user.id,
             Amount = float(txn_data["Amount"]),
             TxnDescription = txn_data["description"],
+            isExpense=bool(txn_data.get("isExpense", True)),
             )
 
     try:
