@@ -94,16 +94,40 @@ def expenseCalculator(person, txn) :
 
 
 def get_participant_Expense(eventID, conn):
-    User_Expense = pd.read_sql(f'SELECT "UserID", sum("AvgAmount") "Expense" FROM tbl_txnshare WHERE "EventID" = {eventID} GROUP BY "UserID"', conn)
-    User_Paid = pd.read_sql(f'SELECT "paidByUserID", sum("Amount") "Paid" FROM tbl_tlist WHERE "EventID" = {eventID} GROUP BY "paidByUserID"', conn)
-    Event_Users = pd.read_sql(f'SELECT "UserID" FROM tbl_eventusers WHERE "EventID" = {eventID}', conn)
+    # User_Expense = pd.read_sql(f'SELECT "UserID", sum("AvgAmount") "Expense" FROM tbl_txnshare WHERE "EventID" = {eventID} GROUP BY "UserID"', conn)
+    # User_Paid = pd.read_sql(f'SELECT "paidByUserID", sum("Amount") "Paid" FROM tbl_tlist WHERE "EventID" = {eventID} GROUP BY "paidByUserID"', conn)
+    # Event_Users = pd.read_sql(f'SELECT "UserID" FROM tbl_eventusers WHERE "EventID" = {eventID}', conn)
+    # temp_1 = pd.merge(Event_Users, User_Expense, how="left", left_on="UserID", right_on="UserID")
+    # temp_2 = pd.merge(temp_1, User_Paid, how="left", left_on="UserID", right_on="paidByUserID").fillna(0)
 
-    temp_1 = pd.merge(Event_Users, User_Expense, how="left", left_on="UserID", right_on="UserID")
-    temp_2 = pd.merge(temp_1, User_Paid, how="left", left_on="UserID", right_on="paidByUserID").fillna(0)
-    temp_2["Payable"] = temp_2["Expense"] - temp_2["Paid"]
+    sql_query = f"""
+    WITH 
+        ExpenseSub AS (
+            SELECT "UserID", SUM("AvgAmount") AS "Expense"
+            FROM tbl_txnshare
+            WHERE "EventID" = {eventID}
+            GROUP BY "UserID"
+        ),
+        PaidSub AS (
+            SELECT "paidByUserID", SUM("Amount") AS "Paid"
+            FROM tbl_tlist
+            WHERE "EventID" = {eventID}
+            GROUP BY "paidByUserID"
+        )
+        SELECT 
+            eu."UserID",
+            COALESCE(e."Expense", 0) AS "Expense",
+            COALESCE(p."Paid", 0) AS "Paid",
+            (COALESCE(e."Expense", 0) - COALESCE(p."Paid", 0)) AS "Payable"
+        FROM tbl_eventusers eu
+        LEFT JOIN ExpenseSub e ON eu."UserID" = e."UserID"
+        LEFT JOIN PaidSub p ON eu."UserID" = p."paidByUserID"
+        WHERE eu."EventID" = {eventID};
+    """
+    agg_expense = pd.read_sql(sql_query, conn)
 
-    sender = [ [r[0],round(r[1],3)] for r in temp_2.loc[temp_2["Payable"] > 0.0, ["UserID", "Payable"]].values.tolist()]
-    receiver = [ [r[0],round(-1.0*r[1],3)] for r in temp_2.loc[temp_2["Payable"] < 0.0, ["UserID", "Payable"]].values.tolist()]
+    sender = [ [r[0],round(r[1],3)] for r in agg_expense.loc[agg_expense["Payable"] > 0.0, ["UserID", "Payable"]].values.tolist()]
+    receiver = [ [r[0],round(-1.0*r[1],3)] for r in agg_expense.loc[agg_expense["Payable"] < 0.0, ["UserID", "Payable"]].values.tolist()]
     sender.sort(key = lambda x:x[1])
     receiver.sort(key = lambda x:x[1], reverse=True)
     # print(sender, receiver)
@@ -151,16 +175,75 @@ def get_participant_Expense(eventID, conn):
     Txn = [[int(t[0]), int(t[1]), round(t[2], 2)] for t in Txn]
 
     #GUI
-    max_bar = max(temp_2["Payable"].max(), temp_2["Paid"].max())
-    temp_2["Paid_Bar"] = temp_2["Mask_Bar"] = temp_2["Paid"]/max_bar
-    temp_2["Payable_Bar"] = temp_2["Payable"]/max_bar
-    temp_2.loc[temp_2["Payable_Bar"] < 0.0, ["Mask_Bar", "Payable_Bar"]] = temp_2.loc[temp_2["Payable_Bar"] < 0.0, ["Payable_Bar", "Mask_Bar"]].values
-    temp_2.loc[temp_2["Mask_Bar"] < 0.0, "Mask_Bar"] = temp_2["Payable_Bar"] + temp_2["Mask_Bar"]
-    temp_2.loc[temp_2["Payable"] > 0.0, "Payable_Bar"] = temp_2["Mask_Bar"] + temp_2["Payable_Bar"]
-    temp_2.index = temp_2["UserID"]
-    Liability_Matrix = temp_2[["Paid", "Payable", 
-                               "Paid_Bar", "Payable_Bar", "Mask_Bar"]]  
-    
+    # max_bar = max(temp_2["Payable"].max(), temp_2["Paid"].max())
+    # temp_2["Paid_Bar"] = temp_2["Mask_Bar"] = temp_2["Paid"]/max_bar
+    # temp_2["Payable_Bar"] = temp_2["Payable"]/max_bar
+    # temp_2.loc[temp_2["Payable_Bar"] < 0.0, ["Mask_Bar", "Payable_Bar"]] = temp_2.loc[temp_2["Payable_Bar"] < 0.0, ["Payable_Bar", "Mask_Bar"]].values
+    # temp_2.loc[temp_2["Mask_Bar"] < 0.0, "Mask_Bar"] = temp_2["Payable_Bar"] + temp_2["Mask_Bar"]
+    # temp_2.loc[temp_2["Payable"] > 0.0, "Payable_Bar"] = temp_2["Mask_Bar"] + temp_2["Payable_Bar"]
+    # temp_2.index = temp_2["UserID"]
+    # Liability_Matrix = temp_2[["Paid", "Payable", 
+    #                            "Paid_Bar", "Payable_Bar", "Mask_Bar"]]
+
+    sql_query_gui = f"""
+    WITH 
+        TList AS (
+            SELECT * FROM tbl_tlist WHERE "EventID" = {eventID}
+        ),
+        ExpenseSub AS (
+            SELECT ts."UserID", SUM("AvgAmount") AS "Expense"
+            FROM tbl_txnshare ts
+            INNER JOIN TList t ON ts."TxnID" = t."TxnID" AND t."isExpense" = TRUE
+            GROUP BY ts."UserID"
+        ),
+        ReceiveSub AS (
+            SELECT ts."UserID", SUM("AvgAmount") AS "Received"
+            FROM tbl_txnshare ts
+            INNER JOIN TList t ON ts."TxnID" = t."TxnID" AND t."isExpense" = FALSE
+            GROUP BY ts."UserID"
+        ),
+        PaidSub AS (
+            SELECT "paidByUserID", SUM("Amount") AS "Paid"
+            FROM tbl_tlist
+            WHERE "EventID" = {eventID} and "isExpense" = TRUE
+            GROUP BY "paidByUserID"
+        ),
+        SqoffSub AS (
+            SELECT "paidByUserID", SUM("Amount") AS "Transferred"
+            FROM tbl_tlist
+            WHERE "EventID" = {eventID} and "isExpense" = False
+            GROUP BY "paidByUserID"
+        )
+        SELECT 
+            eu."UserID",
+            COALESCE(e."Expense", 0) AS "Expense",
+            COALESCE(r."Received", 0) AS "Received",
+            COALESCE(p."Paid", 0) AS "Paid",
+            COALESCE(s."Transferred", 0) AS "Transferred",
+            COALESCE("Expense" + "Received" - "Paid" - "Transferred", 0) AS "Payable"
+        FROM tbl_eventusers eu
+        LEFT JOIN ExpenseSub e ON eu."UserID" = e."UserID"
+        LEFT JOIN PaidSub p ON eu."UserID" = p."paidByUserID"
+        LEFT JOIN SqoffSub s ON eu."UserID" = s."paidByUserID"
+        LEFT JOIN ReceiveSub r ON eu."UserID" = r."UserID"
+        WHERE eu."EventID" = {eventID};
+    """
+
+    agg_expense_gui = pd.read_sql(sql_query_gui, conn)
+    print(agg_expense_gui) 
+    max_bar = max(agg_expense_gui["Expense"].max(), agg_expense_gui["Received"].max(),
+                  agg_expense_gui["Paid"].max(), agg_expense_gui["Transferred"].max(),
+                  agg_expense_gui["Payable"].max(), )
+    agg_expense_gui["Expense_Bar"] = agg_expense_gui["Expense"]/max_bar
+    agg_expense_gui["Received_Bar"] = agg_expense_gui["Received"]/max_bar
+    agg_expense_gui["Paid_Bar"] = agg_expense_gui["Paid"]/max_bar
+    agg_expense_gui["Transferred_Bar"] = agg_expense_gui["Transferred"]/max_bar
+    agg_expense_gui["Payable_Bar"] = agg_expense_gui["Payable"].abs()/max_bar
+
+    agg_expense_gui.index = agg_expense_gui["UserID"]
+    Liability_Matrix = agg_expense_gui[["Expense","Received", "Paid", "Transferred", "Payable", 
+                               "Expense_Bar","Received_Bar", "Paid_Bar", "Transferred_Bar", "Payable_Bar"]]
+
     result = {"GUI" : Liability_Matrix.round(2).to_dict(orient='index'),
               "SqOffs" : Txn}
     return result
