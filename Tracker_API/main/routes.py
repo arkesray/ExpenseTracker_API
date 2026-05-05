@@ -124,6 +124,7 @@ def add_event(current_user):
 @token_required
 def add_participant2event(current_user):
     participant2event_data = request.get_json()
+    print(participant2event_data)
     event_data = isUserInEvent(current_user, participant2event_data["eventName"])
     if event_data == None:
         return jsonify(message = "Event doesn't exist or You are not Authorised "), 403
@@ -136,7 +137,7 @@ def add_participant2event(current_user):
             newEventUser = tbl_eventusers(EventID=event_data.EventID, UserID=participant.id,)
             db.session.add(newEventUser)
 
-        event_data.NumberOfMembers += len(participant2event_data["participantList"])
+        event_data.NumberOfMembers += len(participants)
         db.session.commit()
         return make_response(
             jsonify(message = "Success"), 200,
@@ -152,7 +153,7 @@ def add_participant2event(current_user):
 @token_required
 def add_txns(current_user):
     txn_data = request.get_json()
-
+    print(txn_data)
     event_data = isUserInEvent(current_user, txn_data["eventName"])
     if event_data == None:
         return jsonify(message = "Event doesn't exist or You are not Authorised "), 403
