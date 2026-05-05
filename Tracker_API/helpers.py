@@ -1,14 +1,15 @@
-from .models import tbl_users
+from .models import User
 from flask import request, jsonify, current_app
 from functools import wraps
+import datetime
 
 import jwt
 import pandas as pd
 
 
 def isUserInEvent(this_user, this_eventName):
-    for event in this_user.user_events:
-        if event.EventName == this_eventName:
+    for event in this_user.events:
+        if event.name == this_eventName:
             return event
     return None
     
@@ -26,7 +27,7 @@ def token_required(f):
 
         try: 
             data = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=["HS256"])
-            current_user = tbl_users.query.filter_by(Username=data['Username']).first()
+            current_user = User.query.filter_by(username=data['username']).first()
         except:
             return jsonify({'message' : 'Token is invalid!'}), 401
 
@@ -93,36 +94,55 @@ def expenseCalculator(person, txn) :
     return ans
 
 
+def to_iso_z(dt):
+    """Return ISO 8601 UTC string with trailing Z (milliseconds precision).
+
+    Accepts naive or tz-aware datetimes. Returns None for falsy inputs.
+    """
+    if not dt:
+        return None
+    if not isinstance(dt, datetime.datetime):
+        return str(dt)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=datetime.timezone.utc)
+    dt_utc = dt.astimezone(datetime.timezone.utc)
+    s = dt_utc.isoformat(timespec='milliseconds')
+    # normalize +00:00 to Z
+    if s.endswith('+00:00'):
+        s = s[:-6] + 'Z'
+    return s
+
+
 def get_participant_Expense(eventID, conn):
-    # User_Expense = pd.read_sql(f'SELECT "UserID", sum("AvgAmount") "Expense" FROM tbl_txnshare WHERE "EventID" = {eventID} GROUP BY "UserID"', conn)
-    # User_Paid = pd.read_sql(f'SELECT "paidByUserID", sum("Amount") "Paid" FROM tbl_tlist WHERE "EventID" = {eventID} GROUP BY "paidByUserID"', conn)
-    # Event_Users = pd.read_sql(f'SELECT "UserID" FROM tbl_eventusers WHERE "EventID" = {eventID}', conn)
+    # User_Expense = pd.read_sql(f'SELECT "user_id", sum("share_amount") "Expense" FROM transaction_shares WHERE "event_id" = {eventID} GROUP BY "user_id"', conn)
+    # User_Paid = pd.read_sql(f'SELECT "payer_id", sum("amount") "Paid" FROM transactions WHERE "event_id" = {eventID} GROUP BY "payer_id"', conn)
+    # Event_Users = pd.read_sql(f'SELECT "user_id" FROM event_members WHERE "event_id" = {eventID}', conn)
     # temp_1 = pd.merge(Event_Users, User_Expense, how="left", left_on="UserID", right_on="UserID")
     # temp_2 = pd.merge(temp_1, User_Paid, how="left", left_on="UserID", right_on="paidByUserID").fillna(0)
 
     sql_query = f"""
     WITH 
         ExpenseSub AS (
-            SELECT "UserID", SUM("AvgAmount") AS "Expense"
-            FROM tbl_txnshare
-            WHERE "EventID" = {eventID}
-            GROUP BY "UserID"
+            SELECT ts."user_id" AS "UserID", SUM(ts."share_amount") AS "Expense"
+            FROM transaction_shares ts
+            WHERE "event_id" = {eventID}
+            GROUP BY "user_id"
         ),
         PaidSub AS (
-            SELECT "paidByUserID", SUM("Amount") AS "Paid"
-            FROM tbl_tlist
-            WHERE "EventID" = {eventID}
-            GROUP BY "paidByUserID"
+            SELECT t."paid_by" AS "UserID", SUM(t."amount") AS "Paid"
+            FROM transactions t
+            WHERE t."event_id" = {eventID}
+            GROUP BY t."paid_by"
         )
         SELECT 
-            eu."UserID",
+            eu."user_id" AS "UserID",
             COALESCE(e."Expense", 0) AS "Expense",
             COALESCE(p."Paid", 0) AS "Paid",
             (COALESCE(e."Expense", 0) - COALESCE(p."Paid", 0)) AS "Payable"
-        FROM tbl_eventusers eu
-        LEFT JOIN ExpenseSub e ON eu."UserID" = e."UserID"
-        LEFT JOIN PaidSub p ON eu."UserID" = p."paidByUserID"
-        WHERE eu."EventID" = {eventID};
+        FROM event_members eu
+        LEFT JOIN ExpenseSub e ON eu."user_id" = e."UserID"
+        LEFT JOIN PaidSub p ON eu."user_id" = p."UserID"
+        WHERE eu."event_id" = {eventID};
     """
     agg_expense = pd.read_sql(sql_query, conn)
 
@@ -188,45 +208,45 @@ def get_participant_Expense(eventID, conn):
     sql_query_gui = f"""
     WITH 
         TList AS (
-            SELECT * FROM tbl_tlist WHERE "EventID" = {eventID}
+            SELECT * FROM transactions WHERE "event_id" = {eventID}
         ),
         ExpenseSub AS (
-            SELECT ts."UserID", SUM("AvgAmount") AS "Expense"
-            FROM tbl_txnshare ts
-            INNER JOIN TList t ON ts."TxnID" = t."TxnID" AND t."isExpense" = TRUE
-            GROUP BY ts."UserID"
+            SELECT ts."user_id" AS "UserID", SUM(ts."share_amount") AS "Expense"
+            FROM transaction_shares ts
+            INNER JOIN TList t ON ts."transaction_id" = t."id" AND t."is_expense" = TRUE
+            GROUP BY ts."user_id"
         ),
         ReceiveSub AS (
-            SELECT ts."UserID", SUM("AvgAmount") AS "Received"
-            FROM tbl_txnshare ts
-            INNER JOIN TList t ON ts."TxnID" = t."TxnID" AND t."isExpense" = FALSE
-            GROUP BY ts."UserID"
+            SELECT ts."user_id" AS "UserID", SUM(ts."share_amount") AS "Received"
+            FROM transaction_shares ts
+            INNER JOIN TList t ON ts."transaction_id" = t."id" AND t."is_expense" = FALSE
+            GROUP BY ts."user_id"
         ),
         PaidSub AS (
-            SELECT "paidByUserID", SUM("Amount") AS "Paid"
-            FROM tbl_tlist
-            WHERE "EventID" = {eventID} and "isExpense" = TRUE
-            GROUP BY "paidByUserID"
+            SELECT t."paid_by" AS "UserID", SUM(t."amount") AS "Paid"
+            FROM transactions t
+            WHERE t."event_id" = {eventID} and t."is_expense" = TRUE
+            GROUP BY t."paid_by"
         ),
         SqoffSub AS (
-            SELECT "paidByUserID", SUM("Amount") AS "Transferred"
-            FROM tbl_tlist
-            WHERE "EventID" = {eventID} and "isExpense" = False
-            GROUP BY "paidByUserID"
+            SELECT t."paid_by" AS "UserID", SUM(t."amount") AS "Transferred"
+            FROM transactions t
+            WHERE t."event_id" = {eventID} and t."is_expense" = False
+            GROUP BY t."paid_by"
         )
         SELECT 
-            eu."UserID",
+            eu."user_id" AS "UserID",
             COALESCE(e."Expense", 0) AS "Expense",
             COALESCE(r."Received", 0) AS "Received",
             COALESCE(p."Paid", 0) AS "Paid",
             COALESCE(s."Transferred", 0) AS "Transferred",
             COALESCE("Expense" + "Received" - "Paid" - "Transferred", 0) AS "Payable"
-        FROM tbl_eventusers eu
-        LEFT JOIN ExpenseSub e ON eu."UserID" = e."UserID"
-        LEFT JOIN PaidSub p ON eu."UserID" = p."paidByUserID"
-        LEFT JOIN SqoffSub s ON eu."UserID" = s."paidByUserID"
-        LEFT JOIN ReceiveSub r ON eu."UserID" = r."UserID"
-        WHERE eu."EventID" = {eventID};
+        FROM event_members eu
+        LEFT JOIN ExpenseSub e ON eu."user_id" = e."UserID"
+        LEFT JOIN PaidSub p ON eu."user_id" = p."UserID"
+        LEFT JOIN SqoffSub s ON eu."user_id" = s."UserID"
+        LEFT JOIN ReceiveSub r ON eu."user_id" = r."user_id"
+        WHERE eu."event_id" = {eventID};
     """
 
     agg_expense_gui = pd.read_sql(sql_query_gui, conn)
