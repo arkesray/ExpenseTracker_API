@@ -14,6 +14,30 @@ def isUserInEvent(this_user, this_eventName):
     return None
     
 
+def user_in_event(f):
+    """Decorator for routes that require the current user to be a member of the event.
+
+    Usage:
+      @token_required
+      @user_in_event
+      def handler(current_user, event, ...):
+          # event is the Event object the user belongs to
+
+    The decorator expects the wrapped function to accept `current_user` as
+    the first argument (provided by `token_required`) and the event name as
+    the next positional argument (from the route). It replaces the event
+    name with the actual Event object and returns 403 JSON when not found.
+    """
+    @wraps(f)
+    def decorated(current_user, eventName, *args, **kwargs):
+        event = isUserInEvent(current_user, eventName)
+        if not event:
+            return jsonify(message="Event doesn't exist or You are not Authorised "), 403
+        return f(current_user, event, *args, **kwargs)
+
+    return decorated
+    
+
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):

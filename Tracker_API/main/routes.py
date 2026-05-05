@@ -5,7 +5,7 @@ from flask import request, jsonify, make_response
 
 # from .exp import 
 from .expense import expenseCalculator, calcLiability
-from ..helpers import token_required, isUserInEvent, get_participant_Expense, to_iso_z
+from ..helpers import token_required, isUserInEvent, user_in_event, get_participant_Expense, to_iso_z
 
 @main.route('/participants', methods=["GET"])
 def get_participants():
@@ -39,11 +39,8 @@ def list_events(current_user):
 
 @main.route('/events/<EventName>/members', methods=["GET"])
 @token_required
-def get_event_members(current_user, EventName):
-    event_data = isUserInEvent(current_user, EventName)
-    if event_data == None:
-        return jsonify(message = "Event doesn't exist or You are not Authorised "), 403
-
+@user_in_event
+def get_event_members(current_user, event_data):
     temp_persons = []
     for user in event_data.members:
         eventuser_data = EventMembership.query.filter(
@@ -57,11 +54,8 @@ def get_event_members(current_user, EventName):
 
 @main.route('/events/<EventName>/transactions', methods=["GET"])
 @token_required
-def get_event_transactions(current_user, EventName):
-    event_data = isUserInEvent(current_user, EventName)
-    if event_data == None:
-        return jsonify(message = "Event doesn't exist or You are not Authorised "), 403
-
+@user_in_event
+def get_event_transactions(current_user, event_data):
     temp_txns = []
     for txn in event_data.transactions:
         temp_txns.append({
@@ -118,15 +112,12 @@ def create_event(current_user):
 
 @main.route('/events/<EventName>/members', methods=["POST"])
 @token_required
-def add_members(current_user, EventName):
+@user_in_event
+def add_members(current_user, event_data):
     participant2event_data = request.get_json()
     print(participant2event_data)
-    event_data = isUserInEvent(current_user, EventName)
-    if event_data == None:
-        return jsonify(message = "Event doesn't exist or You are not Authorised "), 403
-    
     participants = User.query.filter(
-        User.username.in_(participant2event_data["participantList"])).all()
+        User.username.in_(participant2event_data["participantList"]) ).all()
     
     try:
         for participant in participants:
@@ -147,13 +138,11 @@ def add_members(current_user, EventName):
     
 @main.route('/events/<EventName>/transactions', methods=["POST"])
 @token_required
-def create_transaction(current_user, EventName):
+@user_in_event
+def create_transaction(current_user, event_data):
     txn_data = request.get_json()
     print(txn_data)
-    event_data = isUserInEvent(current_user, EventName)
-    if event_data == None:
-        return jsonify(message = "Event doesn't exist or You are not Authorised "), 403
-
+    # event_data is provided by the decorator
     paidByUser_data = User.query.filter_by(username=txn_data["paidByUserName"]).first()
 
     if paidByUser_data:
@@ -228,11 +217,8 @@ def delete_transaction(current_user, txn_id):
 
 @main.route('/events/<EventName>/liability/<UserName>', methods=["GET"])
 @token_required
-def get_liability(current_user, EventName, UserName):
-
-    event_data = isUserInEvent(current_user, EventName)
-    if event_data == None:
-        return jsonify(message = "Event doesn't exist or You are not Authorised "), 403
+@user_in_event
+def get_liability(current_user, event_data, UserName):
 
     user = User.query.filter_by(username=UserName).first()
     userRecord = EventMembership.query.filter_by(
@@ -240,7 +226,7 @@ def get_liability(current_user, EventName, UserName):
             event_id=event_data.id).first()
 
     response = {"eventID": userRecord.event_id,
-                "eventName": EventName,
+                "eventName": event_data.name,
                 "userID": userRecord.user_id,
                 "userName": UserName,
                 "userLiability": float(userRecord.liability)
@@ -251,11 +237,8 @@ def get_liability(current_user, EventName, UserName):
 
 @main.route('/events/<EventName>/calculate', methods=["GET"])
 @token_required
-def calculate(current_user, EventName):
-
-    event_data = isUserInEvent(current_user, EventName)
-    if event_data == None:
-        return jsonify(message = "Event doesn't exist or You are not Authorised "), 403
+@user_in_event
+def calculate(current_user, event_data):
 
     numberOfParticipants = len(event_data.members)
     person_mapping, person_mapping_rev = {}, {}
@@ -311,9 +294,9 @@ def calculate(current_user, EventName):
 
 @main.route('/events/<EventName>/analytics', methods=["GET"])
 @token_required
-def get_event_analytics(current_user, EventName):
+@user_in_event
+def get_event_analytics(current_user, event_data):
 
-    event_data = isUserInEvent(current_user, EventName)
     temp_persons = {}
     for user in event_data.members:
         temp_persons[user.id] = user.username
