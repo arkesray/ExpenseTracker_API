@@ -7,7 +7,7 @@ from flask import request, jsonify, make_response
 from .expense import expenseCalculator, calcLiability
 from ..helpers import token_required, isUserInEvent, user_in_event, get_participant_Expense, to_iso_z
 
-@main.route('/participants', methods=["GET"])
+@main.route('/members', methods=["GET"])
 def get_participants():
     search = request.args.get('search', '')
     all_participants = User.query.filter(User.username.ilike("%{}%".format(search))).all()
@@ -16,7 +16,7 @@ def get_participants():
     for person in all_participants:
         temp_persons.append({"id": person.id, "username": person.username, "joinedOn": ""})
 
-    return make_response(jsonify(participants=temp_persons), 200)
+    return make_response(jsonify(members=temp_persons), 200)
 
 
 @main.route('/events', methods=["GET"])
@@ -215,81 +215,81 @@ def delete_transaction(current_user, txn_id):
         return jsonify({'message': "Failed to delete"}), 500
 
 
-@main.route('/events/<EventName>/liability/<UserName>', methods=["GET"])
-@token_required
-@user_in_event
-def get_liability(current_user, event_data, UserName):
+# @main.route('/events/<EventName>/liability/<UserName>', methods=["GET"])
+# @token_required
+# @user_in_event
+# def get_liability(current_user, event_data, UserName):
 
-    user = User.query.filter_by(username=UserName).first()
-    userRecord = EventMembership.query.filter_by(
-            user_id=user.id, 
-            event_id=event_data.id).first()
+#     user = User.query.filter_by(username=UserName).first()
+#     userRecord = EventMembership.query.filter_by(
+#             user_id=user.id, 
+#             event_id=event_data.id).first()
 
-    response = {"eventID": userRecord.event_id,
-                "eventName": event_data.name,
-                "userID": userRecord.user_id,
-                "userName": UserName,
-                "userLiability": float(userRecord.liability)
-    }
+#     response = {"eventID": userRecord.event_id,
+#                 "eventName": event_data.name,
+#                 "userID": userRecord.user_id,
+#                 "userName": UserName,
+#                 "userLiability": float(userRecord.liability)
+#     }
 
-    return jsonify(response), 200
+#     return jsonify(response), 200
 
 
-@main.route('/events/<EventName>/calculate', methods=["GET"])
-@token_required
-@user_in_event
-def calculate(current_user, event_data):
+# @main.route('/events/<EventName>/calculate', methods=["GET"])
+# @token_required
+# @user_in_event
+# def calculate(current_user, event_data):
 
-    numberOfParticipants = len(event_data.members)
-    person_mapping, person_mapping_rev = {}, {}
-    for i in range(numberOfParticipants):
-        event_participant = event_data.members[i]
-        person_mapping[event_participant.id] = i
-        person_mapping_rev[i] = event_participant.id
+#     numberOfParticipants = len(event_data.members)
+#     person_mapping, person_mapping_rev = {}, {}
+#     for i in range(numberOfParticipants):
+#         event_participant = event_data.members[i]
+#         person_mapping[event_participant.id] = i
+#         person_mapping_rev[i] = event_participant.id
 
-    txns = []
-    for txn in event_data.transactions:
-        bin_str = [0]*numberOfParticipants
-        for user in txn.shared_users:
-            bin_str[person_mapping[user.id]] = 1
-        txns.append([person_mapping[txn.paid_by],
-                 float(txn.amount), 
-                     "".join([str(v) for v in bin_str])
-                ])
+#     txns = []
+#     for txn in event_data.transactions:
+#         bin_str = [0]*numberOfParticipants
+#         for user in txn.shared_users:
+#             bin_str[person_mapping[user.id]] = 1
+#         txns.append([person_mapping[txn.paid_by],
+#                  float(txn.amount), 
+#                      "".join([str(v) for v in bin_str])
+#                 ])
     
-    liabilities = calcLiability(numberOfParticipants, txns)
-    pendingTxns = expenseCalculator(liabilities[:])
-    for user_liability in liabilities:
-        userRecord = EventMembership.query.filter_by(
-            user_id=person_mapping_rev[user_liability[1]], 
-            event_id=event_data.id).first()
-        if userRecord:
-            userRecord.liability = user_liability[0]
-            try:
-                db.session.commit()
-            except:
-                db.session.rollback()
+#     liabilities = calcLiability(numberOfParticipants, txns)
+#     pendingTxns = expenseCalculator(liabilities[:])
+#     for user_liability in liabilities:
+#         userRecord = EventMembership.query.filter_by(
+#             user_id=person_mapping_rev[user_liability[1]], 
+#             event_id=event_data.id).first()
+#         if userRecord:
+#             userRecord.liability = user_liability[0]
+#             try:
+#                 db.session.commit()
+#             except:
+#                 db.session.rollback()
     
 
-    temp_liability = []
-    for user_liability in liabilities:
-        user = User.query.filter_by(id=person_mapping_rev[user_liability[1]]).first()
-        temp_liability.append([user.username , user_liability[0]])
+#     temp_liability = []
+#     for user_liability in liabilities:
+#         user = User.query.filter_by(id=person_mapping_rev[user_liability[1]]).first()
+#         temp_liability.append([user.username , user_liability[0]])
 
 
-    temp_pendingTxns = []
-    for pendingTxn in pendingTxns:
-        sender = User.query.filter_by(id=person_mapping_rev[pendingTxn[0]]).first()
-        receiver = User.query.filter_by(id=person_mapping_rev[pendingTxn[1]]).first()
-        temp_pendingTxns.append([sender.username, receiver.username, pendingTxn[2]])
+#     temp_pendingTxns = []
+#     for pendingTxn in pendingTxns:
+#         sender = User.query.filter_by(id=person_mapping_rev[pendingTxn[0]]).first()
+#         receiver = User.query.filter_by(id=person_mapping_rev[pendingTxn[1]]).first()
+#         temp_pendingTxns.append([sender.username, receiver.username, pendingTxn[2]])
 
-    response = {
-        "eventID" : event_data.id,
-        # "liabilities" : temp_liability,
-        "transactionDetails" : temp_pendingTxns
-    }
+#     response = {
+#         "eventID" : event_data.id,
+#         # "liabilities" : temp_liability,
+#         "transactionDetails" : temp_pendingTxns
+#     }
 
-    return jsonify(response), 200
+#     return jsonify(response), 200
 
 
 @main.route('/events/<EventName>/analytics', methods=["GET"])
