@@ -9,7 +9,7 @@ class Event(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
     description = db.Column(db.String(255), nullable=True)
-    created_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.now(datetime.timezone.utc))
+    created_at: Mapped[datetime.datetime] = mapped_column(default=lambda: datetime.datetime.now(datetime.timezone.utc))
     owner_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
 
     member_count = db.Column(db.Integer, nullable=False, default=0)
@@ -46,7 +46,7 @@ class Transaction(db.Model):
     amount = db.Column(db.Numeric(12, 2), nullable=False)
     description = db.Column(db.String(255), nullable=True)
     is_expense = db.Column(db.Boolean, nullable=False)
-    created_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.now(datetime.timezone.utc))
+    created_at: Mapped[datetime.datetime] = mapped_column(default=lambda: datetime.datetime.now(datetime.timezone.utc))
     shared_users = db.relationship('User', secondary='transaction_shares', back_populates='shared_transactions', lazy=True)
 
     paid_by_user = db.relationship('User', foreign_keys=[paid_by], backref='paid_transactions')
@@ -83,7 +83,7 @@ class EventMembership(db.Model):
     __tablename__ = 'event_members'
     event_id = db.Column(db.Integer, db.ForeignKey('events.id'), primary_key=True, nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), primary_key=True, nullable=False)
-    joined_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.now(datetime.timezone.utc))
+    joined_at: Mapped[datetime.datetime] = mapped_column(default=lambda: datetime.datetime.now(datetime.timezone.utc))
     liability = db.Column(db.Numeric(12, 2), nullable=False, default=0)
 
     def __init__(self, event_id, user_id, liability=0.0):
