@@ -15,7 +15,7 @@ class User(db.Model):
     
     # relationships
     events = db.relationship('Event', secondary='event_members', back_populates='members', lazy=True)
-    # shared_transactions = db.relationship('Transaction', secondary='transaction_shares', back_populates='shared_users', lazy=True)
+    shared_transactions = db.relationship('Transaction', secondary='transaction_shares', back_populates='shared_users', lazy=True)
 
     def __init__(self, username, password_hash, name, is_registered):
        self.username = username
@@ -76,7 +76,7 @@ class Transaction(db.Model):
     is_expense = db.Column(db.Boolean, nullable=False)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    shared_users = db.relationship('User', secondary='transaction_shares', back_populates='', lazy=True)
+    shared_users = db.relationship('User', secondary='transaction_shares', back_populates='shared_transactions', lazy=True)
     transaction_shares = db.relationship('TransactionShare', back_populates='transaction', lazy=True)
     paid_by_user = db.relationship('User', foreign_keys=[paid_by_id], backref='paid_transactions')
     created_by_user = db.relationship('User', foreign_keys=[created_by_id], backref='created_transactions')
