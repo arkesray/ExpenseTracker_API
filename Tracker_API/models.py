@@ -15,7 +15,6 @@ class User(db.Model):
     
     # relationships
     events = db.relationship('Event', secondary='event_members', back_populates='members', lazy=True)
-    shared_transactions = db.relationship('Transaction', secondary='transaction_shares', back_populates='shared_users', lazy=True)
 
     def __init__(self, username, password_hash, name, is_registered):
        self.username = username
@@ -41,7 +40,7 @@ class Event(db.Model):
     created_by_user = db.relationship('User', foreign_keys=[created_by_id], backref='created_events')
     members = db.relationship('User', secondary='event_members', back_populates='events', lazy=True)
     transactions = db.relationship('Transaction', backref='event', lazy=True)
-    transaction_shares = db.relationship('TransactionShare', backref='event', lazy=True)
+    # transaction_shares = db.relationship('TransactionShare', backref='event', lazy=True)
 
     def __init__(self, name, created_by_id, description=None):
         self.name = name
@@ -76,7 +75,8 @@ class Transaction(db.Model):
     is_expense = db.Column(db.Boolean, nullable=False)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    shared_users = db.relationship('User', secondary='transaction_shares', back_populates='shared_transactions', lazy=True)
+    # relationships
+    shared_by_users = db.relationship('User', secondary='transaction_shares', backref='shared_transactions', lazy=True)
     transaction_shares = db.relationship('TransactionShare', back_populates='transaction', lazy=True)
     paid_by_user = db.relationship('User', foreign_keys=[paid_by_id], backref='paid_transactions')
     created_by_user = db.relationship('User', foreign_keys=[created_by_id], backref='created_transactions')
@@ -101,25 +101,24 @@ class Transaction(db.Model):
         self.paid_by_id = paid_by_id
         self.amount = amount
         self.description = description
-        self.created_by_id = created_by_id
         self.is_expense = is_expense
+        self.created_by_id = created_by_id
 
 
 class TransactionShare(db.Model):
     __tablename__ = 'transaction_shares'
     transaction_id = db.Column(db.Integer, db.ForeignKey('transactions.id'), primary_key=True, nullable=False)
+    total_amount = db.Column(db.Numeric(12, 6), nullable=False) # DB-level trigger # temporary delete later
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), primary_key=True, nullable=False)
-    event_id = db.Column(db.Integer, db.ForeignKey('events.id'), nullable=True)
-    total_amount = db.Column(db.Numeric(12, 6), nullable=False)
     share_amount = db.Column(db.Numeric(12, 6), nullable=False)
 
+    # relationships
     transaction = db.relationship('Transaction', back_populates='transaction_shares', foreign_keys=[transaction_id], lazy=True)
 
-    def __init__(self, transaction_id, user_id, share_amount, event_id=None):
+    def __init__(self, transaction_id, user_id, share_amount):
         self.transaction_id = transaction_id
         self.user_id = user_id
         self.share_amount = share_amount
-        self.event_id = event_id
         self.total_amount = 0
 
 
