@@ -8,15 +8,15 @@ from .expense import expenseCalculator, calcLiability
 from ..helpers import token_required, isUserInEvent, user_in_event, get_participant_Expense, to_iso_z
 
 @main.route('/members', methods=["GET"])
-def get_participants():
+def get_members():
     search = request.args.get('search', '')
-    all_participants = User.query.filter(User.username.ilike("%{}%".format(search))).all()
+    all_members = User.query.filter(User.username.ilike("%{}%".format(search))).all()
 
-    temp_persons = []
-    for person in all_participants:
-        temp_persons.append({"id": person.id, "username": person.username, "joinedOn": ""})
+    temp_members = []
+    for person in all_members:
+        temp_members.append({"id": person.id, "username": person.username, "joinedOn": ""})
 
-    return make_response(jsonify(members=temp_persons), 200)
+    return make_response(jsonify(members=temp_members), 200)
 
 
 @main.route('/events', methods=["GET"])
@@ -31,7 +31,7 @@ def list_events(current_user):
                     "EventTime": to_iso_z(event.created_at),
                     "EventDescription": event.description,
                     "TotalExpense": float(event.total_amount),
-                    "EventOwner": current_user.username,
+                    "EventOwner": event.created_by_user.username if event.created_by_user else None,
                     })
     
     return make_response(jsonify(Events = temp_events), 200) 
@@ -41,15 +41,15 @@ def list_events(current_user):
 @token_required
 @user_in_event
 def get_event_members(current_user, event_data):
-    temp_persons = []
+    temp_members = []
     for user in event_data.members:
         eventuser_data = EventMembership.query.filter(
                                     EventMembership.event_id == event_data.id,
                                     EventMembership.user_id == user.id).one()
-        temp_persons.append({"id": user.id, "username": user.username,
-                      "joinedon": to_iso_z(eventuser_data.joined_at)})
+        temp_members.append({"id": user.id, "username": user.username,
+                      "joinedOn": to_iso_z(eventuser_data.joined_at)})
 
-    return make_response(jsonify(EventID = event_data.id, EventParticipants = temp_persons), 200)
+    return make_response(jsonify(EventID = event_data.id, EventMembers = temp_members), 200)
 
 
 @main.route('/events/<EventName>/transactions', methods=["GET"])
@@ -78,7 +78,7 @@ def create_event(current_user):
     event_data = request.get_json()
     event = Event(
         name=event_data["eventName"],
-        owner_id=current_user.id,
+        created_by=current_user.id,
         description=event_data["eventDescription"],
     )
     try:
@@ -114,17 +114,17 @@ def create_event(current_user):
 @token_required
 @user_in_event
 def add_members(current_user, event_data):
-    participant2event_data = request.get_json()
-    print(participant2event_data)
-    participants = User.query.filter(
-        User.username.in_(participant2event_data["participantList"]) ).all()
+    members_payload = request.get_json()
+    print(members_payload)
+    members_to_add = User.query.filter(
+        User.username.in_(members_payload["memberList"]) ).all()
     
     try:
-        for participant in participants:
-            newEventUser = EventMembership(event_id=event_data.id, user_id=participant.id,)
+        for member in members_to_add:
+            newEventUser = EventMembership(event_id=event_data.id, user_id=member.id,)
             db.session.add(newEventUser)
 
-        event_data.member_count += len(participants)
+        event_data.member_count += len(members_to_add)
         db.session.commit()
         return make_response(
             jsonify(message = "Success"), 200,
@@ -132,7 +132,7 @@ def add_members(current_user, event_data):
     except:
         db.session.rollback()
         return make_response(
-            jsonify(message = "Adding Participant to Event Failed"), 500,
+            jsonify(message = "Adding members to Event Failed"), 500,
         )
 
     
@@ -297,24 +297,24 @@ def delete_transaction(current_user, txn_id):
 @user_in_event
 def get_event_analytics(current_user, event_data):
 
-    temp_persons = {}
+    member_map = {}
     for user in event_data.members:
-        temp_persons[user.id] = user.username
+        member_map[user.id] = user.username
     
     response, sqOffTxns = [], []
     result = get_participant_Expense(event_data.id, db.engine)
     memberDues = result["GUI"]
     for userID in memberDues:
         temp_memberDue = {}
-        temp_memberDue['Username'] = temp_persons[userID]
+        temp_memberDue['Username'] = member_map[userID]
         temp_memberDue.update(memberDues[userID])
         response.append(temp_memberDue)
     
     squareOffs = result["SqOffs"]
     for sq in squareOffs:
         temp_SqOff = {}
-        temp_SqOff["sender"] = temp_persons[sq[0]]
-        temp_SqOff["receiver"] = temp_persons[sq[1]]
+        temp_SqOff["sender"] = member_map[sq[0]]
+        temp_SqOff["receiver"] = member_map[sq[1]]
         temp_SqOff["Amount"] = sq[2]
         sqOffTxns.append(temp_SqOff)
 
