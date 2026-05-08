@@ -1,48 +1,64 @@
 import datetime
-# from flask_login import UserMixin
-from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import DateTime, func, text, event, ForeignKeyConstraint
+from decimal import Decimal
+from typing import List, Optional
+
+from sqlalchemy import Integer, String, Boolean, Numeric, DateTime, func, text, event, ForeignKey, ForeignKeyConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship, selectinload
+from sqlalchemy.ext.associationproxy import association_proxy
 from . import db
 
 
 class User(db.Model):
     __tablename__ = 'users'
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False, index=True)
-    password_hash = db.Column(db.String(255), nullable=False)
-    name = db.Column(db.String(100), unique=False, nullable=False)
-    is_registered = db.Column(db.Boolean, nullable=False)
-    
-    # relationships
-    events = db.relationship('Event', secondary='event_members', back_populates='members', lazy=True)
 
-    def __init__(self, username, password_hash, name, is_registered):
-       self.username = username
-       self.password_hash = password_hash
-       self.name = name
-       self.is_registered = is_registered
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    username: Mapped[str] = mapped_column(String(80), unique=True, nullable=False, index=True)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    is_registered: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text('false'))
+
+    # relationships
+    events: Mapped[List['Event']] = relationship('Event', secondary='event_members', back_populates='members', lazy='selectin')
+    # association-proxy to expose transactions a user participates in via TransactionShare
+    # shared_transactions = association_proxy('transaction_shares', 'transaction')
+
+    # memberships: Mapped[List['EventMembership']] = relationship('EventMembership', back_populates='user', lazy='selectin', cascade='all, delete-orphan')
+    # transaction_shares: Mapped[List['TransactionShare']] = relationship('TransactionShare', back_populates='user', lazy='selectin', cascade='all, delete-orphan')
+    # created_events: Mapped[List['Event']] = relationship('Event', back_populates='created_by_user', lazy='selectin')
+    # created_transactions: Mapped[List['Transaction']] = relationship('Transaction', back_populates='created_by_user', lazy='selectin')
+    # paid_transactions: Mapped[List['Transaction']] = relationship('Transaction', back_populates='paid_by_user', lazy='selectin')
+
+
+    def __init__(self, username: str, password_hash: str, name: str, is_registered: bool = False) -> None:
+        self.username = username
+        self.password_hash = password_hash
+        self.name = name
+        self.is_registered = is_registered
 
 
 class Event(db.Model):
     __tablename__ = 'events'
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), unique=True, nullable=False)
-    description = db.Column(db.String(255), nullable=True)
-    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    
-    # metrics
-    member_count = db.Column(db.Integer, nullable=False, default=0)
-    transaction_count = db.Column(db.Integer, nullable=False, default=0)
-    total_amount = db.Column(db.Numeric(12, 6), nullable=False, default=0)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_by_id: Mapped[int] = mapped_column(Integer, ForeignKey('users.id', ondelete='RESTRICT'), nullable=False, index=True)
+
+    # metrics (DB-level defaults for production)
+    member_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text('0'))
+    transaction_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text('0'))
+    total_amount: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False, server_default=text('0'))
 
     # relationships
-    created_by_user = db.relationship('User', foreign_keys=[created_by_id], backref='created_events')
-    members = db.relationship('User', secondary='event_members', back_populates='events', lazy=True)
-    transactions = db.relationship('Transaction', backref='event', lazy=True)
-    # transaction_shares = db.relationship('TransactionShare', backref='event', lazy=True)
+    # created_by_user: Mapped['User'] = relationship('User', foreign_keys=[created_by_id], back_populates='created_events', lazy='selectin')
+    created_by_user: Mapped['User'] = relationship('User', foreign_keys=[created_by_id], lazy='selectin')
+    members: Mapped[List['User']] = relationship('User', secondary='event_members', back_populates='events', lazy='selectin')
+    # transactions: Mapped[List['Transaction']] = relationship('Transaction', back_populates='event', lazy='selectin')
+    transactions: Mapped[List['Transaction']] = relationship('Transaction', lazy='selectin')
+    # memberships: Mapped[List['EventMembership']] = relationship('EventMembership', back_populates='event', lazy='selectin', cascade='all, delete-orphan')
 
-    def __init__(self, name, created_by_id, description=None):
+    def __init__(self, name: str, created_by_id: int, description: Optional[str] = None) -> None:
         self.name = name
         self.created_by_id = created_by_id
         self.description = description
@@ -53,12 +69,18 @@ class Event(db.Model):
 
 class EventMembership(db.Model):
     __tablename__ = 'event_members'
-    event_id = db.Column(db.Integer, db.ForeignKey('events.id'), primary_key=True, nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), primary_key=True, nullable=False)
-    joined_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    liability = db.Column(db.Numeric(12, 6), nullable=False, default=0)
+    event_id: Mapped[int] = mapped_column(Integer, ForeignKey('events.id', ondelete='RESTRICT'), primary_key=True, nullable=False)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey('users.id', ondelete='RESTRICT'), primary_key=True, nullable=False)
+    joined_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    liability: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False, server_default=text('0'))
 
-    def __init__(self, event_id, user_id, liability=0.0):
+    # relationships for easier navigation
+    # user: Mapped['User'] = relationship('User', foreign_keys=[user_id], back_populates='memberships', lazy='joined')
+    user: Mapped['User'] = relationship('User', foreign_keys=[user_id], lazy='joined')
+    # event: Mapped['Event'] = relationship('Event', foreign_keys=[event_id], back_populates='memberships', lazy='joined')
+    event: Mapped['Event'] = relationship('Event', foreign_keys=[event_id], lazy='joined')
+
+    def __init__(self, event_id: int, user_id: int, liability: float = 0.0) -> None:
         self.event_id = event_id
         self.user_id = user_id
         self.liability = liability
@@ -66,20 +88,25 @@ class EventMembership(db.Model):
 
 class Transaction(db.Model):
     __tablename__ = 'transactions'
-    id = db.Column(db.Integer, primary_key=True)
-    event_id = db.Column(db.Integer, db.ForeignKey('events.id'), nullable=False)
-    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    paid_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    amount = db.Column(db.Numeric(12, 6), nullable=False)
-    description = db.Column(db.String(255), nullable=True)
-    is_expense = db.Column(db.Boolean, nullable=False)
-    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    event_id: Mapped[int] = mapped_column(Integer, ForeignKey('events.id', ondelete='RESTRICT'), nullable=False, index=True)
+    created_by_id: Mapped[int] = mapped_column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    paid_by_id: Mapped[int] = mapped_column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    is_expense: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     # relationships
-    shared_by_users = db.relationship('User', secondary='transaction_shares', backref='shared_transactions', lazy=True)
-    transaction_shares = db.relationship('TransactionShare', back_populates='transaction', lazy=True)
-    paid_by_user = db.relationship('User', foreign_keys=[paid_by_id], backref='paid_transactions')
-    created_by_user = db.relationship('User', foreign_keys=[created_by_id], backref='created_transactions')
+    # association-proxy to expose users who share this transaction through TransactionShare
+    shared_by_users = association_proxy('transaction_shares', 'user')
+    # paid_by_user: Mapped['User'] = relationship('User', foreign_keys=[paid_by_id], back_populates='paid_transactions', lazy='selectin')
+    paid_by_user: Mapped['User'] = relationship('User', foreign_keys=[paid_by_id], lazy='selectin')
+    # created_by_user: Mapped['User'] = relationship('User', foreign_keys=[created_by_id], back_populates='created_transactions', lazy='selectin')
+    created_by_user: Mapped['User'] = relationship('User', foreign_keys=[created_by_id], lazy='selectin')
+    transaction_shares: Mapped[List['TransactionShare']] = relationship('TransactionShare', back_populates='transaction', lazy='selectin')
+    # event: Mapped['Event'] = relationship('Event', back_populates='transactions', lazy='selectin')
 
     __table_args__ = (
         ForeignKeyConstraint(
@@ -96,30 +123,66 @@ class Transaction(db.Model):
         ),
     )
 
-    def __init__(self, event_id, paid_by_id, created_by_id, is_expense=True, amount=0, description=None):
+    def __init__(self, event_id: int, paid_by_id: int, created_by_id: int, is_expense: bool = True, amount: Decimal | float = 0, description: Optional[str] = None) -> None:
         self.event_id = event_id
         self.paid_by_id = paid_by_id
-        self.amount = amount
+        self.amount = Decimal(amount)
         self.description = description
         self.is_expense = is_expense
         self.created_by_id = created_by_id
 
+    def add_share(self, user: 'User', amount: Decimal | float) -> 'TransactionShare':
+        """Convenience helper to add a TransactionShare for this transaction.
+
+        Example:
+            tx.add_share(user_obj, Decimal('12.34'))
+        """
+        ts = TransactionShare(transaction=self, user=user, share_amount=Decimal(amount))
+        self.transaction_shares.append(ts)
+        return ts
+
+    @staticmethod
+    def list_with_shares(session):
+        """Return all transactions with their shares and share users eager-loaded to avoid N+1."""
+        return session.query(Transaction).options(
+            selectinload(Transaction.transaction_shares).selectinload(TransactionShare.user)
+        ).all()
+
 
 class TransactionShare(db.Model):
     __tablename__ = 'transaction_shares'
-    transaction_id = db.Column(db.Integer, db.ForeignKey('transactions.id'), primary_key=True, nullable=False)
-    total_amount = db.Column(db.Numeric(12, 6), nullable=False) # DB-level trigger # temporary delete later
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), primary_key=True, nullable=False)
-    share_amount = db.Column(db.Numeric(12, 6), nullable=False)
+
+    transaction_id: Mapped[int] = mapped_column(Integer, ForeignKey('transactions.id', ondelete='RESTRICT'), primary_key=True, nullable=False)
+    total_amount: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)  # DB-level trigger / temporary
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey('users.id', ondelete='RESTRICT'), primary_key=True, nullable=False)
+    share_amount: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
 
     # relationships
-    transaction = db.relationship('Transaction', back_populates='transaction_shares', foreign_keys=[transaction_id], lazy=True)
+    transaction: Mapped['Transaction'] = relationship('Transaction', back_populates='transaction_shares', foreign_keys=[transaction_id], lazy='selectin')
+    # user: Mapped['User'] = relationship('User', back_populates='transaction_shares', foreign_keys=[user_id], lazy='joined')
+    user: Mapped['User'] = relationship('User', foreign_keys=[user_id], lazy='joined')
 
-    def __init__(self, transaction_id, user_id, share_amount):
-        self.transaction_id = transaction_id
-        self.user_id = user_id
-        self.share_amount = share_amount
-        self.total_amount = 0
+    def __init__(
+        self,
+        transaction_id: Optional[int] = None,
+        user_id: Optional[int] = None,
+        share_amount: Decimal | float = 0,
+        transaction: Optional['Transaction'] = None,
+        user: Optional['User'] = None,
+    ) -> None:
+        # allow creation by ids or by objects; SQLAlchemy will handle relationship syncing
+        if transaction is not None:
+            self.transaction = transaction
+        elif transaction_id is not None:
+            self.transaction_id = transaction_id
+
+        if user is not None:
+            self.user = user
+        elif user_id is not None:
+            self.user_id = user_id
+
+        self.share_amount = Decimal(share_amount)
+        self.total_amount = Decimal(0)
 
 
 # Not needed with the new trigger-based approach, but leaving here for reference if we want to do it in-app instead of DB triggers
