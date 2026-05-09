@@ -26,7 +26,7 @@ $$ LANGUAGE plpgsql VOLATILE;
 
 DROP TRIGGER IF EXISTS trg_transactions_update_event_totals ON transactions;
 CREATE TRIGGER trg_transactions_update_event_totals
-AFTER INSERT OR UPDATE OR DELETE ON transactions
+AFTER INSERT OR DELETE ON transactions
 FOR EACH ROW EXECUTE FUNCTION transactions_update_event_totals();
 
 

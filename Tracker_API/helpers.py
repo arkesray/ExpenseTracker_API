@@ -29,8 +29,8 @@ def user_in_event(f):
     name with the actual Event object and returns 403 JSON when not found.
     """
     @wraps(f)
-    def decorated(current_user, eventName, *args, **kwargs):
-        event = isUserInEvent(current_user, eventName)
+    def decorated(current_user, EventName, *args, **kwargs):
+        event = isUserInEvent(current_user, EventName)
         if not event:
             return jsonify(message="Event doesn't exist or You are not Authorised "), 403
         return f(current_user, event, *args, **kwargs)

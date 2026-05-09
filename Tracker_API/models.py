@@ -54,8 +54,7 @@ class Event(db.Model):
     # created_by_user: Mapped['User'] = relationship('User', foreign_keys=[created_by_id], back_populates='created_events', lazy='selectin')
     created_by_user: Mapped['User'] = relationship('User', foreign_keys=[created_by_id], lazy='selectin')
     members: Mapped[List['User']] = relationship('User', secondary='event_members', back_populates='events', lazy='selectin')
-    # transactions: Mapped[List['Transaction']] = relationship('Transaction', back_populates='event', lazy='selectin')
-    transactions: Mapped[List['Transaction']] = relationship('Transaction', lazy='selectin')
+    transactions: Mapped[List['Transaction']] = relationship('Transaction', back_populates='event', lazy='selectin')
     # memberships: Mapped[List['EventMembership']] = relationship('EventMembership', back_populates='event', lazy='selectin', cascade='all, delete-orphan')
 
     def __init__(self, name: str, created_by_id: int, description: Optional[str] = None) -> None:
@@ -76,9 +75,9 @@ class EventMembership(db.Model):
 
     # relationships for easier navigation
     # user: Mapped['User'] = relationship('User', foreign_keys=[user_id], back_populates='memberships', lazy='joined')
-    user: Mapped['User'] = relationship('User', foreign_keys=[user_id], lazy='joined')
+    user: Mapped['User'] = relationship('User', foreign_keys=[user_id], lazy='joined', overlaps="events,members")
     # event: Mapped['Event'] = relationship('Event', foreign_keys=[event_id], back_populates='memberships', lazy='joined')
-    event: Mapped['Event'] = relationship('Event', foreign_keys=[event_id], lazy='joined')
+    event: Mapped['Event'] = relationship('Event', foreign_keys=[event_id], lazy='joined', overlaps="events,members")
 
     def __init__(self, event_id: int, user_id: int, liability: float = 0.0) -> None:
         self.event_id = event_id
@@ -106,7 +105,7 @@ class Transaction(db.Model):
     # created_by_user: Mapped['User'] = relationship('User', foreign_keys=[created_by_id], back_populates='created_transactions', lazy='selectin')
     created_by_user: Mapped['User'] = relationship('User', foreign_keys=[created_by_id], lazy='selectin')
     transaction_shares: Mapped[List['TransactionShare']] = relationship('TransactionShare', back_populates='transaction', lazy='selectin')
-    # event: Mapped['Event'] = relationship('Event', back_populates='transactions', lazy='selectin')
+    event: Mapped['Event'] = relationship('Event', back_populates='transactions', lazy='selectin')
 
     __table_args__ = (
         ForeignKeyConstraint(

@@ -63,7 +63,7 @@ def get_event_transactions(current_user, event_data):
             "EventID": txn.event_id,
             "paidByUserName": txn.paid_by_user.username if txn.paid_by_user else None,
             "Amount": float(txn.amount),
-            "sharedByUserNames": [u.username for u in txn.shared_users],
+            "sharedByUserNames": [u.username for u in txn.shared_by_users],
             "TxnDescription": txn.description,
             "TxnTime": to_iso_z(txn.created_at),
             "TxnAddedBy": txn.created_by_user.username if txn.created_by_user else None,
@@ -78,7 +78,7 @@ def create_event(current_user):
     event_data = request.get_json()
     event = Event(
         name=event_data["eventName"],
-        created_by=current_user.id,
+        created_by_id=current_user.id,
         description=event_data["eventDescription"],
     )
     try:
@@ -164,8 +164,8 @@ def create_transaction(current_user, event_data):
 
         txn = Transaction(
             event_id = event_data.id,
-            paid_by = paidByUser_data.id,
-            created_by = current_user.id,
+            paid_by_id = paidByUser_data.id,
+            created_by_id = current_user.id,
             amount = float(txn_data["Amount"]),
             description = txn_data["description"],
             is_expense=bool(txn_data.get("isExpense", True)),
@@ -177,10 +177,9 @@ def create_transaction(current_user, event_data):
         db.session.commit()
         try:
             for user in sharedUser_data:
-                txn_Shares = TransactionShare(transaction_id=txn.id, user_id=user.id, share_amount=float(txn_data["Amount"])/len(sharedUser_data), event_id=event_data.id)
+                txn_Shares = TransactionShare(transaction_id=txn.id, user_id=user.id, share_amount=float(txn_data["Amount"])/len(sharedUser_data))
                 db.session.add(txn_Shares)
             
-            event_data.update_total_amount()
             db.session.commit()
             return jsonify(message = "Success", TxnID=txn.id), 201
         except:
@@ -203,9 +202,11 @@ def create_transaction(current_user, event_data):
 @token_required
 def delete_transaction(current_user, txn_id):
     txn = Transaction.query.get(txn_id)
+    if not txn:
+        return jsonify(message="Txn not found"), 404
 
     if current_user not in txn.event.members:
-        return jsonify(message = "You are not Authorised to delete Txn"), 403
+        return jsonify(message="You are not Authorised to delete Txn"), 403
 
     try:
         db.session.delete(txn)
