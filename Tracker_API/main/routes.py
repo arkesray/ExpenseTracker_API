@@ -142,60 +142,71 @@ def add_members(current_user, event_data):
 def create_transaction(current_user, event_data):
     txn_data = request.get_json()
     print(txn_data)
-    # event_data is provided by the decorator
-    paidByUser_data = User.query.filter_by(username=txn_data["paidByUserName"]).first()
+    
+    member_usernames = [u.username for u in event_data.members]
+    
+    # Validate paidByUserName
+    paidByUserName = txn_data["paidByUserName"]
+    if paidByUserName not in member_usernames:
+        return jsonify(message="Paid By User not in event"), 500
+    paidByUser_data = next(u for u in event_data.members if u.username == paidByUserName)
+    
+    # Validate sharedByUserNames
+    sharedByUserNames = txn_data["sharedByUserNames"]
+    if not sharedByUserNames:
+        return jsonify(message="Can't add txn without SharedUsers"), 500
 
-    if paidByUser_data:
-        if not isUserInEvent(paidByUser_data, event_data.name):
-            return jsonify(message = "Paid By User not in event"), 500 
-    else:
-        return jsonify(message = "Paid By User doesn't exists"), 500
+    shared_users = []
+    total_share = 0.0
+    usernames_seen = set()
+    # Expect schema: [{"username": "alice", "share": 10}, ...]
+    for item in sharedByUserNames:
+        if not isinstance(item, dict):
+            return jsonify(message="Invalid sharedByUserNames format"), 500
+        if 'username' not in item or 'share' not in item:
+            return jsonify(message="Each shared item must have 'username' and 'share'"), 500
 
-    sharedUser_data = User.query.filter(
-        User.username.in_(txn_data["sharedByUserNames"])).all()
-
-    if len(txn_data["sharedByUserNames"]) == 0 or len(txn_data["sharedByUserNames"]) != len(sharedUser_data):
-        return jsonify(message = "Can't add txn without SharedUsers or Missing Shared User"), 500
-
-    for sharedUser in sharedUser_data:
-        if sharedUser not in event_data.members:
-            return jsonify(message = "SharedUsers not found in Event"), 500
-
-
-        txn = Transaction(
-            event_id = event_data.id,
-            paid_by_id = paidByUser_data.id,
-            created_by_id = current_user.id,
-            amount = float(txn_data["Amount"]),
-            description = txn_data["description"],
-            is_expense=bool(txn_data.get("isExpense", True)),
-            )
-
-    try:
-        flag_deleteTxnFailed = False
-        db.session.add(txn)
-        db.session.commit()
+        username = item['username']
         try:
-            for user in sharedUser_data:
-                txn_Shares = TransactionShare(transaction_id=txn.id, user_id=user.id, share_amount=float(txn_data["Amount"])/len(sharedUser_data))
-                db.session.add(txn_Shares)
-            
-            db.session.commit()
-            return jsonify(message = "Success", TxnID=txn.id), 201
-        except:
-            flag_deleteTxnFailed = True
-            db.session.rollback()
-            db.session.delete(txn)
-            db.session.commit()
-            flag_deleteTxnFailed = False
-            return jsonify(message = "Failed Adding Shares of txn. Removed Transaction"), 500
-        
-    except:
+            share_amount = float(item['share'])
+        except (TypeError, ValueError):
+            return jsonify(message=f"Invalid share amount for {username}"), 500
+
+        if username not in member_usernames:
+            return jsonify(message=f"Shared user {username} not in event"), 500
+        if username in usernames_seen:
+            return jsonify(message=f"Duplicate shared user {username}"), 500
+        usernames_seen.add(username)
+        user = next(u for u in event_data.members if u.username == username)
+        shared_users.append({'user': user, 'share_amount': share_amount})
+        total_share += share_amount
+    
+    if abs(total_share - float(txn_data["Amount"])) > 1e-4:
+        return jsonify(message="Total share amounts do not match transaction amount"), 500
+    
+    # Create transaction
+    txn = Transaction(
+        event_id=event_data.id,
+        paid_by_id=paidByUser_data.id,
+        created_by_id=current_user.id,
+        amount=float(txn_data["Amount"]),
+        description=txn_data["description"],
+        is_expense=bool(txn_data.get("isExpense", True)),
+    )
+    
+    try:
+        db.session.add(txn)
+        # Use model helper to add shares; SQLAlchemy will manage relationship syncing
+        for item in shared_users:
+            txn.add_share(item['user'], item['share_amount'])
+
+        # Flush to ensure txn.id (and any FK values) are populated, then commit atomically
+        db.session.flush()
+        db.session.commit()
+        return jsonify(message="Success", TxnID=txn.id), 201
+    except Exception as e:
         db.session.rollback()
-        if not flag_deleteTxnFailed:
-            return jsonify(message = "Failed Adding txn"), 500
-        else:
-            return jsonify(message = "TXNs ADDED without SHARED USERS"), 500
+        return jsonify(message="Failed to create transaction"), 500
 
 
 @main.route('/transactions/<int:txn_id>', methods=["DELETE"])
