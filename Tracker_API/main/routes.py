@@ -5,7 +5,7 @@ from flask import request, jsonify, make_response
 
 # from .exp import 
 from .expense import expenseCalculator, calcLiability
-from ..helpers import token_required, isUserInEvent, user_in_event, get_participant_Expense, to_iso_z
+from ..helpers import calculate_required_settlements, get_settlement_matrix, token_required, isUserInEvent, user_in_event, to_iso_z, get_expense_matrix
 
 @main.route('/members', methods=["GET"])
 def get_members():
@@ -67,6 +67,7 @@ def get_event_transactions(current_user, event_data):
             "TxnDescription": txn.description,
             "TxnTime": to_iso_z(txn.created_at),
             "TxnAddedBy": txn.created_by_user.username if txn.created_by_user else None,
+            "isExpense": txn.is_expense,
         })
 
     return make_response(jsonify(txns=temp_txns), 200)
@@ -115,7 +116,7 @@ def create_event(current_user):
 @user_in_event
 def add_members(current_user, event_data):
     members_payload = request.get_json()
-    print(members_payload)
+    # print(members_payload)
     members_to_add = User.query.filter(
         User.username.in_(members_payload["memberList"]) ).all()
     
@@ -141,7 +142,7 @@ def add_members(current_user, event_data):
 @user_in_event
 def create_transaction(current_user, event_data):
     txn_data = request.get_json()
-    print(txn_data)
+    # print(txn_data)
     
     member_usernames = [u.username for u in event_data.members]
     
@@ -227,6 +228,45 @@ def delete_transaction(current_user, txn_id):
         return jsonify({'message': "Failed to delete"}), 500
 
 
+@main.route('/events/<EventName>/analytics', methods=["GET"])
+@token_required
+@user_in_event
+def get_event_analytics(current_user, event_data):
+
+    # get expense
+    expense_matrix = get_expense_matrix(event_data.id, db.engine)
+    member_totals = expense_matrix.loc[["Members Total"]].select_dtypes(include='number')
+    if "Items Total" in member_totals.columns:
+        member_totals = member_totals.drop(columns=["Items Total"])
+    expenses = member_totals.iloc[0].to_dict()
+
+    # get paid by
+    actual_paid_expenses = expense_matrix.drop(index="Members Total")
+    paid = actual_paid_expenses.groupby("PaidBy")["Items Total"].sum().to_dict()
+
+    # get existing settlement transactions
+    existing_settlement_txns = get_settlement_matrix(event_data.id, db.engine)
+
+    # calculate required settlement transactions
+    required_txns = calculate_required_settlements(expenses, paid, existing_settlement_txns)
+
+    response = {
+        "EventID": event_data.id,
+        "Expenses": expenses,
+        "PaidBy": paid,
+        "ExistingSettlements": existing_settlement_txns,
+        "RequiredTransactions": required_txns,
+    }
+    # print("Response:", response)
+    return make_response(jsonify(response), 200)
+
+
+
+
+
+
+
+
 # @main.route('/events/<EventName>/liability/<UserName>', methods=["GET"])
 # @token_required
 # @user_in_event
@@ -304,30 +344,30 @@ def delete_transaction(current_user, txn_id):
 #     return jsonify(response), 200
 
 
-@main.route('/events/<EventName>/analytics', methods=["GET"])
-@token_required
-@user_in_event
-def get_event_analytics(current_user, event_data):
+# @main.route('/events/<EventName>/analytics', methods=["GET"])
+# @token_required
+# @user_in_event
+# def get_event_analytics(current_user, event_data):
 
-    member_map = {}
-    for user in event_data.members:
-        member_map[user.id] = user.username
+#     member_map = {}
+#     for user in event_data.members:
+#         member_map[user.id] = user.username
     
-    response, sqOffTxns = [], []
-    result = get_participant_Expense(event_data.id, db.engine)
-    memberDues = result["GUI"]
-    for userID in memberDues:
-        temp_memberDue = {}
-        temp_memberDue['Username'] = member_map[userID]
-        temp_memberDue.update(memberDues[userID])
-        response.append(temp_memberDue)
+#     response, sqOffTxns = [], []
+#     result = get_participant_Expense(event_data.id, db.engine)
+#     memberDues = result["GUI"]
+#     for userID in memberDues:
+#         temp_memberDue = {}
+#         temp_memberDue['Username'] = member_map[userID]
+#         temp_memberDue.update(memberDues[userID])
+#         response.append(temp_memberDue)
     
-    squareOffs = result["SqOffs"]
-    for sq in squareOffs:
-        temp_SqOff = {}
-        temp_SqOff["sender"] = member_map[sq[0]]
-        temp_SqOff["receiver"] = member_map[sq[1]]
-        temp_SqOff["Amount"] = sq[2]
-        sqOffTxns.append(temp_SqOff)
+#     squareOffs = result["SqOffs"]
+#     for sq in squareOffs:
+#         temp_SqOff = {}
+#         temp_SqOff["sender"] = member_map[sq[0]]
+#         temp_SqOff["receiver"] = member_map[sq[1]]
+#         temp_SqOff["Amount"] = sq[2]
+#         sqOffTxns.append(temp_SqOff)
 
-    return make_response(jsonify(memberDues = response, squareOffs = sqOffTxns), 200)
+#     return make_response(jsonify(memberDues = response, squareOffs = sqOffTxns), 200)
