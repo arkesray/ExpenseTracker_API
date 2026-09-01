@@ -261,7 +261,37 @@ def get_event_analytics(current_user, event_data):
     return make_response(jsonify(response), 200)
 
 
+@main.route('/events/<EventName>', methods=["DELETE"])
+@token_required
+@user_in_event
+def delete_event(current_user, event_data):
+    # Check if user is authorized (already handled by @user_in_event)
+    try:
+        # 1. Delete all transaction shares for this event's transactions
+        transaction_ids = db.session.query(Transaction.id).filter(
+            Transaction.event_id == event_data.id
+        ).all()
+        t_ids = [t[0] for t in transaction_ids]
 
+        if t_ids:
+            db.session.execute(
+                db.delete(TransactionShare).where(TransactionShare.transaction_id.in_(t_ids))
+            )
+
+        # 2. Delete all transactions for this event
+        db.session.query(Transaction).filter(Transaction.event_id == event_data.id).delete(synchronize_session=False)
+
+        # 3. Remove all memberships
+        db.session.query(EventMembership).filter(EventMembership.event_id == event_data.id).delete(synchronize_session=False)
+
+        # 4. Delete the event itself
+        db.session.delete(event_data)
+        
+        db.session.commit()
+        return jsonify(message="Event and all related data deleted successfully"), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(message=f"Failed to delete event: {str(e)}"), 500
 
 
 
