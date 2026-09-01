@@ -284,8 +284,10 @@ def delete_event(current_user, event_data):
         # 3. Remove all memberships
         db.session.query(EventMembership).filter(EventMembership.event_id == event_data.id).delete(synchronize_session=False)
 
-        # 4. Delete the event itself
-        db.session.delete(event_data)
+        # 4. Delete the event itself without reusing loaded relationships.
+        db.session.query(Event).filter(Event.id == event_data.id).delete(
+            synchronize_session=False
+        )
         
         db.session.commit()
         return jsonify(message="Event and all related data deleted successfully"), 200
